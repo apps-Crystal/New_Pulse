@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: 'Inter', 'IBM Plex Sans', system-ui, Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+html, body {
+  padding: 0;
+  margin: 0;
+  font-family: var(--font-sans);
+}
+
+.font-mono, .tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* LIVE badge pulse */
+@keyframes livePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.92); }
+}
+.animate-live { animation: livePulse 1.5s ease-in-out infinite; }
+
+/* generic alarm pulse */
+@keyframes alarmPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.animate-alarm { animation: alarmPulse 1s ease-in-out infinite; }
+
+/* modal border pulse */
+@keyframes borderPulse {
+  0%, 100% { border-color: rgba(255,255,255,0.95); }
+  50% { border-color: rgba(255,255,255,0.35); }
+}
+.animate-border { animation: borderPulse 2s ease-in-out infinite; }
+
+/* toast slide-in */
+@keyframes toastIn {
+  from { transform: translateX(120%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+.animate-toast { animation: toastIn 0.35s ease-out; }
+
+/* scanline overlay for the alarm modal */
+.scanlines {
+  background-image: repeating-linear-gradient(
+    0deg, rgba(0,0,0,0.05) 0px, rgba(0,0,0,0.05) 1px, transparent 1px, transparent 3px
+  );
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: rgba(120,120,140,0.5); border-radius: 6px; }
