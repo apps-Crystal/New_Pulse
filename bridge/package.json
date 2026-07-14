@@ -1,0 +1,13 @@
+{
+  "name": "pulse-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pulse HMI bridge — single persistent WECON-HMI websocket client that serves cold-storage temperatures over HTTP",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
