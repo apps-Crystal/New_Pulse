@@ -18,6 +18,7 @@ export default function Dashboard() {
   const [alarms, setAlarms] = useState([]);
   const [warnings, setWarnings] = useState([]);
   const [events, setEvents] = useState([]);
+  const [alarmsMuted, setAlarmsMuted] = useState(true); // start muted: show temperatures only
 
   const sinceRef = useRef(new Map());            // zoneId -> alarm start ts
   const prevStatusRef = useRef(new Map());       // zoneId -> last status
@@ -115,7 +116,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen">
-      <Header connected={connected} />
+      <Header connected={connected} alarmsMuted={alarmsMuted} onToggleAlarms={() => setAlarmsMuted((m) => !m)} />
 
       <main className="mx-auto max-w-[1280px] space-y-5 px-6 py-6">
         <MetricCards total={total} normal={normalCount} alarm={alarmCount} warning={warnCount} />
@@ -138,9 +139,9 @@ export default function Dashboard() {
         </div>
       </main>
 
-      <WarningToasts warnings={warnings} />
-      <AlarmModal alarms={alarms} />
-      <AlarmSiren active={alarmCount > 0} />
+      {!alarmsMuted && <WarningToasts warnings={warnings} />}
+      {!alarmsMuted && <AlarmModal alarms={alarms} />}
+      <AlarmSiren active={!alarmsMuted && alarmCount > 0} />
     </div>
   );
 }

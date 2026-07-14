@@ -1,9 +1,9 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { Moon, Sun, Snowflake, Wifi, WifiOff } from 'lucide-react';
+import { Moon, Sun, Snowflake, Wifi, WifiOff, Bell, BellOff } from 'lucide-react';
 import { fmtClock } from '../lib/format';
 
-export default function Header({ connected }) {
+export default function Header({ connected, alarmsMuted, onToggleAlarms }) {
   const [dark, setDark] = useState(false);
   const [clock, setClock] = useState('--:--:--');
 
@@ -57,6 +57,20 @@ export default function Header({ connected }) {
             {connected ? <Wifi className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}
             {connected ? 'HMI ONLINE' : 'HMI OFFLINE'}
           </div>
+
+          <button
+            onClick={onToggleAlarms}
+            aria-label="Toggle alarms"
+            title={alarmsMuted ? 'Alarms muted — click to enable' : 'Alarms on — click to mute'}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold ${
+              alarmsMuted
+                ? 'bg-slate-100 text-slate-500 dark:bg-white/5 dark:text-slate-400'
+                : 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300'
+            }`}
+          >
+            {alarmsMuted ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+            {alarmsMuted ? 'ALARMS OFF' : 'ALARMS ON'}
+          </button>
 
           <button
             onClick={toggle}
