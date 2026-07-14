@@ -1,12 +1,14 @@
 // Pulse bridge server. Holds the single persistent HMI connection and exposes a small
 // read-only HTTP API the Next.js dashboard polls. No PLC writes are ever performed.
 const http = require('http');
-const { HmiClient } = require('./hmi-client');
+const { HmiBrowser } = require('./hmi-browser');
 
 const PORT = Number(process.env.BRIDGE_PORT || 4000);
 const HOST = process.env.HMI_HOST || '192.168.0.51';
 
-const hmi = new HmiClient({ host: HOST });
+// Headless-browser engine: renders the HMI as the single allowed client so the live
+// numeric temperatures are actually emitted (a raw protobuf client only gets the layout).
+const hmi = new HmiBrowser({ host: HOST });
 hmi.start();
 
 function send(res, code, obj) {
