@@ -19,6 +19,7 @@ class HmiBrowser {
     this.lastFrameAt = 0;
     this.zones = {};
     for (const z of ZONES) this.zones[z.id] = { actual: null, setLow: null, setHigh: null, updatedAt: 0 };
+    this.lastSeen = { temp1: 0, temp2: 0 }; // last successful harvest per temp screen
     this._stopped = false;
   }
 
@@ -39,6 +40,7 @@ class HmiBrowser {
       this.page = null;
       this._shot_temp1 = this._shot_temp2 = false;
       this._seen_temp1 = this._seen_temp2 = false;
+      this.lastSeen = { temp1: 0, temp2: 0 };
       if (this._stopped) break;
       this.log('restarting engine in 8s');
       await this._sleep(8000);
@@ -67,11 +69,22 @@ class HmiBrowser {
     if (this._wd) clearInterval(this._wd);
     this._wd = setInterval(() => {
       if (this._stopped || !this.connected) return;
-      if (Date.now() - this.lastProgress > 75000) {
+      const now = Date.now();
+      // (a) total stall: no loop progress at all.
+      if (now - this.lastProgress > 75000) {
         this.log('watchdog: no progress for 75s — restarting engine');
-        this.lastProgress = Date.now();
+        this.lastProgress = now;
         this.connected = false;
-        // Closing the browser makes any hung page op reject -> _run throws -> start() restarts.
+        try { if (this.browser) this.browser.close(); } catch {}
+        return;
+      }
+      // (b) partial stall: one temp screen keeps updating but the other went stale (navigation
+      // stuck on a single screen, e.g. a popup ate the nav click). Restart to re-navigate both.
+      const { temp1, temp2 } = this.lastSeen;
+      if (temp1 && temp2 && now - Math.min(temp1, temp2) > 150000) {
+        this.log('watchdog: a temp screen went stale (stuck navigation) — restarting engine');
+        this.lastSeen = { temp1: 0, temp2: 0 };
+        this.connected = false;
         try { if (this.browser) this.browser.close(); } catch {}
       }
     }, 15000);
@@ -120,12 +133,14 @@ class HmiBrowser {
         await this._sleep(RETRY_MS);
         continue;
       }
-      // wait for the vendor protobuf to be present
+      // Confirm the HMI actually reached the device: its protobuf global only initialises once
+      // the page's websocket connects to the PLC. If it never appears the VPN/PLC is
+      // unreachable — don't falsely claim "connected"; retry (shorter wait than nomore_client).
       let ok = false;
       for (let i = 0; i < 20; i++) { ok = await this.page.evaluate(() => !!(window.proto && window.proto.hmiproto)).catch(() => false); if (ok) break; await this._sleep(500); }
       if (ok) { claimed = true; break; }
-      this.log('page loaded but protobuf not ready; retrying');
-      await this._sleep(3000);
+      this.log('HMI not reachable yet (VPN/PLC down?) — retrying in 12s');
+      await this._sleep(12000);
     }
     if (!claimed) throw new Error('could not claim HMI slot / protobuf not ready');
 
@@ -151,14 +166,15 @@ class HmiBrowser {
 
   async _navigate(target) {
     const nav = target === 'temp1' ? NAV.temp1 : NAV.temp2;
+    // The nav buttons live on the base temp screen (1/2); target the screen we're currently
+    // on rather than SCRSTACK.Top(), which can be a popup that would swallow the click.
+    const scrHint = this.currentScreen || 1;
     // clear captured text so we only read the screen we're about to enter
     await this.page.evaluate(() => { window.__texts = {}; }).catch(() => {});
-    await this.page.evaluate((nav) => {
+    await this.page.evaluate((nav, scrHint) => {
       // Prefer the HMI's own event sender; fall back to canvas pointer events.
-      const scr = (function () {
-        try { if (window.SCRSTACK && SCRSTACK.Top) return SCRSTACK.Top().ScrNo; } catch (e) {}
-        return (window.nCurrentScrNo != null ? window.nCurrentScrNo : 0);
-      })();
+      let scr = scrHint;
+      try { const top = window.SCRSTACK && SCRSTACK.Top && SCRSTACK.Top().ScrNo; if (top === 1 || top === 2) scr = top; } catch (e) {}
       try {
         if (typeof window.SendEvent === 'function' && typeof window.EVENT_CLICKDOWN !== 'undefined') {
           window.SendEvent(scr, '', window.EVENT_CLICKDOWN, `${nav.x},${nav.y}`);
@@ -172,7 +188,7 @@ class HmiBrowser {
       el.dispatchEvent(new PointerEvent('pointerdown', opts));
       setTimeout(() => el.dispatchEvent(new PointerEvent('pointerup', opts)), 90);
       return 'pointer';
-    }, nav).catch(() => {});
+    }, nav, scrHint).catch(() => {});
   }
 
   async _harvest(target) {
@@ -246,6 +262,7 @@ class HmiBrowser {
       z.updatedAt = Date.now();
       harvested++;
     }
+    if (harvested) this.lastSeen[screenName] = Date.now();
     // Log a concise confirmation the first time each screen yields data, then stay quiet.
     if (harvested && !this[`_seen_${screenName}`]) {
       this[`_seen_${screenName}`] = true;
