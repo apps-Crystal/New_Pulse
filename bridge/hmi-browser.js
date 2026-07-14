@@ -24,6 +24,7 @@ class HmiBrowser {
 
   async start() {
     this._stopped = false;
+    this._startWatchdog();
     while (!this._stopped) {
       try {
         await this._run();
@@ -31,6 +32,13 @@ class HmiBrowser {
         this.log('engine error:', e.message);
       }
       this.connected = false;
+      // Always tear the browser down before restarting, or the old (possibly hung) instance
+      // keeps holding the HMI's single client slot and the new one gets nomore_client.
+      try { if (this.browser) await this.browser.close(); } catch {}
+      this.browser = null;
+      this.page = null;
+      this._shot_temp1 = this._shot_temp2 = false;
+      this._seen_temp1 = this._seen_temp2 = false;
       if (this._stopped) break;
       this.log('restarting engine in 8s');
       await this._sleep(8000);
@@ -39,10 +47,35 @@ class HmiBrowser {
 
   async stop() {
     this._stopped = true;
+    if (this._wd) clearInterval(this._wd);
     if (this.browser) { try { await this.browser.close(); } catch {} }
   }
 
   _sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+  // Reject if a page operation hangs, so one stuck call can't stall the whole loop forever.
+  _withTimeout(promise, ms, label) {
+    return Promise.race([
+      promise,
+      new Promise((_, rej) => setTimeout(() => rej(new Error(`timeout: ${label}`)), ms)),
+    ]);
+  }
+
+  // Watchdog: if the harvest loop makes no progress for a while, force a full engine restart.
+  _startWatchdog() {
+    this.lastProgress = Date.now();
+    if (this._wd) clearInterval(this._wd);
+    this._wd = setInterval(() => {
+      if (this._stopped || !this.connected) return;
+      if (Date.now() - this.lastProgress > 75000) {
+        this.log('watchdog: no progress for 75s — restarting engine');
+        this.lastProgress = Date.now();
+        this.connected = false;
+        // Closing the browser makes any hung page op reject -> _run throws -> start() restarts.
+        try { if (this.browser) this.browser.close(); } catch {}
+      }
+    }, 15000);
+  }
 
   async _run() {
     this.log('launching Chrome');
@@ -100,15 +133,18 @@ class HmiBrowser {
     this.log('claimed HMI slot — rendering client active');
 
     // Navigation + harvest loop. As a full client, entering a temp screen loads its numerics.
+    // Every page op is time-boxed so a single hung call can't freeze the loop (which would
+    // silently stop updates while still holding the slot).
     let target = 'temp1';
     while (!this._stopped) {
-      await this._navigate(target);
+      this.lastProgress = Date.now(); // feed the watchdog: this iteration is alive
+      await this._withTimeout(this._navigate(target), 15000, 'navigate');
       await this._sleep(1500);
-      await this._harvest(target);
+      await this._withTimeout(this._harvest(target), 15000, 'harvest');
       await this._sleep(3500);
       target = target === 'temp1' ? 'temp2' : 'temp1';
       // detect if we got bounced (reload to nomore_client / login)
-      const url = this.page.url();
+      const url = await this._withTimeout(Promise.resolve(this.page.url()), 5000, 'url').catch(() => '');
       if (url.includes('nomore_client') || url.includes('login')) { this.log('bounced off HMI, restarting'); break; }
     }
   }
