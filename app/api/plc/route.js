@@ -1,32 +1,30 @@
-// Same-origin proxy to the local bridge. Keeps the browser off cross-origin requests and
-// gives a clean failure shape when the bridge is unreachable.
+// GET /api/plc - live room snapshot from the Supabase Postgres data source.
+// Polled by the dashboard every 2s. Must never return an HTML error page.
 export const dynamic = 'force-dynamic';
+export const maxDuration = 10; // seconds; Vercel serverless limit for this route
 export const revalidate = 0;
+export const runtime = 'nodejs';
 
-const BRIDGE_URL = process.env.BRIDGE_URL || 'http://localhost:4000';
+import { getSnapshot } from '../../../lib/db';
+
+const NO_STORE = { 'Cache-Control': 'no-store' };
 
 export async function GET() {
   try {
-    const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), 4000);
-    const res = await fetch(`${BRIDGE_URL}/api/plc`, {
-      cache: 'no-store',
-      signal: controller.signal,
-    });
-    clearTimeout(t);
-    const data = await res.json();
-    return Response.json(data, { status: res.status, headers: { 'Cache-Control': 'no-store' } });
-  } catch (e) {
+    const snap = await getSnapshot();
+    return Response.json(snap, { status: snap.connected ? 200 : 503, headers: NO_STORE });
+  } catch (err) {
     return Response.json(
       {
         ok: false,
         connected: false,
-        source: 'hmi',
-        error: `bridge unreachable: ${e.message}`,
+        source: 'supabase',
+        error: (err && err.message) || String(err),
         timestamp: new Date().toISOString(),
+        detected: null,
         rooms: {},
       },
-      { status: 503, headers: { 'Cache-Control': 'no-store' } }
+      { status: 503, headers: NO_STORE }
     );
   }
 }

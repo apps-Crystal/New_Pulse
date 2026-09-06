@@ -1,0 +1,10 @@
+.git
+node_modules
+.next
+.env.local
+.env*.local
+test
+test-integration
+*.log
+pulse-server*.log
+setpoints.json

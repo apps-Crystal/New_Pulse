@@ -1,21 +1,71 @@
 @echo off
-REM Pulse launcher — starts the HMI bridge, the dashboard, and opens the kiosk view.
-REM Prerequisite: FortiClient "PLC" VPN connected, and NO other browser tab on 192.168.0.51.
-cd /d %~dp0
+setlocal
+title Pulse Launcher
+cd /d "%~dp0"
 
-echo Starting Pulse bridge (HMI reader) ...
-start "Pulse Bridge" cmd /k "node bridge\server.js"
+rem ---- Resolve Node.js ----
+if exist "C:\Program Files\nodejs\node.exe" (
+  set "PATH=C:\Program Files\nodejs;%PATH%"
+  goto :node_ok
+)
+if exist "%USERPROFILE%\.node\current\node.exe" (
+  set "PATH=%USERPROFILE%\.node\current;%PATH%"
+  goto :node_ok
+)
+echo [Pulse] Node.js was not found.
+echo         Install Node.js 20+ from https://nodejs.org/ or place a portable copy at
+echo         %USERPROFILE%\.node\current\node.exe
+pause
+exit /b 1
 
-timeout /t 4 >nul
+:node_ok
+rem ---- Check environment file ----
+if not exist ".env.local" (
+  echo [Pulse] .env.local is missing.
+  echo         1. Copy .env.example to .env.local
+  echo         2. Replace [YOUR-PASSWORD] in DATABASE_URL with the Supabase database password
+  echo         3. Run this launcher again
+  pause
+  exit /b 1
+)
 
-echo Starting Pulse dashboard ...
-start "Pulse Dashboard" cmd /k "npm run dev"
+rem ---- Install dependencies on first run ----
+if not exist "node_modules" (
+  echo [Pulse] Installing dependencies - first run...
+  call npm install
+  if errorlevel 1 (
+    echo [Pulse] npm install failed.
+    pause
+    exit /b 1
+  )
+)
 
-timeout /t 10 >nul
+rem ---- Build once (production mode starts in ~1 s and is steadier than dev mode for a kiosk) ----
+if not exist ".next\BUILD_ID" (
+  echo [Pulse] Building the dashboard - first run, takes about a minute...
+  call npm run build
+  if errorlevel 1 (
+    echo [Pulse] Build failed.
+    pause
+    exit /b 1
+  )
+)
 
-echo Opening kiosk view ...
-start "" "C:\Program Files\Google\Chrome\Application\chrome.exe" --kiosk --autoplay-policy=no-user-gesture-required --user-data-dir="C:\PulseKiosk" http://localhost:3000
+rem ---- Start the dashboard ----
+echo [Pulse] Starting dashboard on http://localhost:3000 ...
+start "Pulse Dashboard" cmd /k "npm start"
 
-echo.
-echo Pulse is starting. Bridge: http://localhost:4000/api/plc  Dashboard: http://localhost:3000
-echo Close this window when done, then close the two Pulse windows.
+rem ---- Wait for Next.js, then open the kiosk ----
+timeout /t 6 /nobreak >nul
+
+set "CHROME=C:\Program Files\Google\Chrome\Application\chrome.exe"
+if not exist "%CHROME%" set "CHROME=C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
+if not exist "%CHROME%" set "CHROME=%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"
+if not exist "%CHROME%" (
+  echo [Pulse] Chrome not found - open http://localhost:3000 in a browser manually.
+  pause
+  exit /b 0
+)
+
+start "" "%CHROME%" --kiosk --autoplay-policy=no-user-gesture-required --user-data-dir="C:\PulseKiosk" http://localhost:3000
+endlocal

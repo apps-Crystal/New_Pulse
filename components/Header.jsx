@@ -55,7 +55,7 @@ export default function Header({ connected, alarmsMuted, onToggleAlarms }) {
             }`}
           >
             {connected ? <Wifi className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}
-            {connected ? 'HMI ONLINE' : 'HMI OFFLINE'}
+            {connected ? 'DB ONLINE' : 'DB OFFLINE'}
           </div>
 
           <button

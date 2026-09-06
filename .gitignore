@@ -1,6 +1,5 @@
 # dependencies
 node_modules/
-bridge/node_modules/
 
 # next.js build output
 .next/
@@ -14,10 +13,10 @@ out/
 # logs
 *.log
 
-# debug artifacts from the HMI engine
-bridge/debug-*.png
-
 # editor / tooling
 .claude/
 .vscode/
 .DS_Store
+
+# integration tests (embedded postgres data dir)
+test-integration/.pgdata/

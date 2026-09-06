@@ -1,0 +1,19 @@
+{
+  "_comment": "Pulse alarm limits per zone, in degrees C. The plant database (public.readings) stores temperatures only, so limits come from this file. Copy this file to setpoints.json in the project folder, fill in low/high for each zone (leave null for no limit on that side) and restart Pulse; setpoints.json is read once at startup. A zone with both values null shows LOW/HIGH as '-' and never alarms. Type-wide defaults are also accepted as keys ('frozen', 'chiller', 'other', or '*' for all zones); an explicit zone entry overrides them. Database set-point columns, when present, always win over this file.",
+  "frozen_room_1":    { "low": null, "high": null },
+  "frozen_room_2":    { "low": null, "high": null },
+  "frozen_room_3":    { "low": null, "high": null },
+  "frozen_room_4":    { "low": null, "high": null },
+  "frozen_room_5":    { "low": null, "high": null },
+  "frozen_anteroom":  { "low": null, "high": null },
+  "chiller_room_1":   { "low": null, "high": null },
+  "chiller_room_2":   { "low": null, "high": null },
+  "chiller_room_3":   { "low": null, "high": null },
+  "chiller_room_4":   { "low": null, "high": null },
+  "chiller_room_5":   { "low": null, "high": null },
+  "chiller_room_6":   { "low": null, "high": null },
+  "chiller_anteroom": { "low": null, "high": null },
+  "blast_freezer_1":  { "low": null, "high": null },
+  "blast_freezer_2":  { "low": null, "high": null },
+  "dock_area":        { "low": null, "high": null }
+}

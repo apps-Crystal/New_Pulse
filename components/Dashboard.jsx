@@ -9,7 +9,12 @@ import AlarmSiren from './AlarmSiren';
 import EventsTable from './EventsTable';
 import { zoneStatus, fmtClock } from '../lib/format';
 
-const POLL_MS = 2000;
+// Poll interval. Override at build time with NEXT_PUBLIC_POLL_MS (e.g. 10000 on Vercel, where every
+// poll is a serverless function call). Values below 1000 are ignored.
+const POLL_MS = (() => {
+  const n = Number(process.env.NEXT_PUBLIC_POLL_MS);
+  return Number.isFinite(n) && n >= 1000 ? n : 2000;
+})();
 const MAX_EVENTS = 50;
 
 export default function Dashboard() {
@@ -134,8 +139,8 @@ export default function Dashboard() {
 
         <div className="pb-6 text-center text-xs text-slate-400">
           {connected
-            ? `Reading live from HMI · ${offlineCount ? `${offlineCount} zone(s) awaiting data · ` : ''}polling every 2s`
-            : 'Bridge offline — showing last-known state. Ensure the Pulse bridge is running and an HMI client slot is free.'}
+            ? `Reading live from Supabase · ${offlineCount ? `${offlineCount} zone(s) awaiting data · ` : ''}polling every 2s`
+            : 'Database unreachable - showing last-known state. Check DATABASE_URL in .env.local and that this PC can reach Supabase (port 5432, IPv6).'}
         </div>
       </main>
 
