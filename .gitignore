@@ -20,3 +20,6 @@ out/
 
 # integration tests (embedded postgres data dir)
 test-integration/.pgdata/
+
+.vercel
+.env*

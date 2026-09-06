@@ -139,7 +139,7 @@ export default function Dashboard() {
 
         <div className="pb-6 text-center text-xs text-slate-400">
           {connected
-            ? `Reading live from Supabase · ${offlineCount ? `${offlineCount} zone(s) awaiting data · ` : ''}polling every 2s`
+            ? `Reading live from Supabase · ${offlineCount ? `${offlineCount} zone(s) awaiting data · ` : ''}polling every ${Math.round(POLL_MS / 1000)}s`
             : 'Database unreachable - showing last-known state. Check DATABASE_URL in .env.local and that this PC can reach Supabase (port 5432, IPv6).'}
         </div>
       </main>
