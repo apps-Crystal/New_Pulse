@@ -7,6 +7,7 @@ import AlarmModal from './AlarmModal';
 import WarningToasts from './WarningToasts';
 import AlarmSiren from './AlarmSiren';
 import EventsTable from './EventsTable';
+import SensorECG from './SensorECG';
 import { zoneStatus, fmtClock } from '../lib/format';
 
 // Poll interval. Override at build time with NEXT_PUBLIC_POLL_MS (e.g. 10000 on Vercel, where every
@@ -120,24 +121,27 @@ export default function Dashboard() {
   const normalCount = rooms.filter((r) => zoneStatus(r) === 'ok').length;
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen font-sans transition-colors duration-300">
       <Header connected={connected} alarmsMuted={alarmsMuted} onToggleAlarms={() => setAlarmsMuted((m) => !m)} />
 
-      <main className="mx-auto max-w-[1280px] space-y-5 px-6 py-6">
+      <main className="mx-auto max-w-7xl space-y-6 px-6 py-6">
         <MetricCards total={total} normal={normalCount} alarm={alarmCount} warning={warnCount} />
 
+        {/* ECG sensor activity monitor: health = zones reporting / total zones */}
+        <SensorECG activeCount={rooms.length - offlineCount} totalCount={total} connected={connected} />
+
         {/* Room grid */}
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {rooms.length === 0
             ? Array.from({ length: 16 }).map((_, i) => (
-                <div key={i} className="h-40 animate-pulse rounded-xl bg-slate-200 dark:bg-slate-800" />
+                <div key={i} className="h-40 animate-pulse rounded-lg bg-slate-200 dark:bg-slate-800" />
               ))
             : rooms.map((room) => <RoomCard key={room.id} room={room} />)}
         </div>
 
         <EventsTable events={events} />
 
-        <div className="pb-6 text-center text-xs text-slate-400">
+        <div className="pb-6 text-center text-xs font-medium text-slate-400 dark:text-slate-500">
           {connected
             ? `Reading live from Supabase · ${offlineCount ? `${offlineCount} zone(s) awaiting data · ` : ''}polling every ${Math.round(POLL_MS / 1000)}s`
             : 'Database unreachable - showing last-known state. Check DATABASE_URL in .env.local and that this PC can reach Supabase (port 5432, IPv6).'}

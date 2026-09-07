@@ -89,8 +89,8 @@ export default function AlarmSiren({ active }) {
   if (!armed) {
     return (
       <div className="fixed bottom-4 right-4 z-[100000]">
-        <div className="flex items-center gap-2 rounded-full bg-slate-800 px-3 py-2 text-xs text-white shadow-lg">
-          <VolumeX className="h-4 w-4" /> Sound muted — click anywhere to arm
+        <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white/90 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500 shadow-lg backdrop-blur-md dark:border-slate-700 dark:bg-slate-800/90 dark:text-slate-400">
+          <VolumeX size={14} /> Sound muted — click anywhere to arm
         </div>
       </div>
     );
