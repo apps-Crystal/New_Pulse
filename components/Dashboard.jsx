@@ -124,14 +124,14 @@ export default function Dashboard() {
     <div className="min-h-screen font-sans transition-colors duration-300">
       <Header connected={connected} alarmsMuted={alarmsMuted} onToggleAlarms={() => setAlarmsMuted((m) => !m)} />
 
-      <main className="mx-auto max-w-7xl space-y-6 px-6 py-6">
+      <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">
         <MetricCards total={total} normal={normalCount} alarm={alarmCount} warning={warnCount} />
 
         {/* ECG sensor activity monitor: health = zones reporting / total zones */}
         <SensorECG activeCount={rooms.length - offlineCount} totalCount={total} connected={connected} />
 
         {/* Room grid */}
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {rooms.length === 0
             ? Array.from({ length: 16 }).map((_, i) => (
                 <div key={i} className="h-40 animate-pulse rounded-lg bg-slate-200 dark:bg-slate-800" />

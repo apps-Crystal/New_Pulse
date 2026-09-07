@@ -1,13 +1,13 @@
 'use client';
 import { Clock, CheckCircle } from 'lucide-react';
 
-const TH = 'px-6 py-3 text-left bg-slate-50 transition-colors duration-300 dark:bg-slate-900';
+const TH = 'whitespace-nowrap px-4 py-3 text-left bg-slate-50 transition-colors duration-300 dark:bg-slate-900 sm:px-6';
 
 export default function EventsTable({ events }) {
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition-colors duration-300 dark:border-slate-700 dark:bg-slate-800">
       {/* Header */}
-      <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-6 py-4 transition-colors duration-300 dark:border-slate-700 dark:bg-slate-900">
+      <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-4 py-4 sm:px-6 transition-colors duration-300 dark:border-slate-700 dark:bg-slate-900">
         <div className="rounded-lg border border-slate-200 bg-white p-2 shadow-sm transition-colors duration-300 dark:border-slate-700 dark:bg-slate-800">
           <Clock size={20} className="text-slate-600 transition-colors duration-300 dark:text-slate-400" />
         </div>
@@ -47,21 +47,21 @@ export default function EventsTable({ events }) {
             ) : (
               events.map((e) => (
                 <tr key={e.key} className="group transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                  <td className="tabular px-6 py-4 font-mono text-sm text-slate-600 transition-colors duration-300 group-hover:text-slate-900 dark:text-slate-400 dark:group-hover:text-slate-200">
+                  <td className="tabular whitespace-nowrap px-4 py-4 sm:px-6 font-mono text-sm text-slate-600 transition-colors duration-300 group-hover:text-slate-900 dark:text-slate-400 dark:group-hover:text-slate-200">
                     {e.time}
                   </td>
-                  <td className="px-6 py-4">
-                    <span className="inline-flex items-center gap-1.5 text-sm font-bold text-slate-700 transition-colors duration-300 dark:text-slate-200">
+                  <td className="px-4 py-4 sm:px-6">
+                    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-bold text-slate-700 transition-colors duration-300 dark:text-slate-200">
                       {e.active && <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />}
                       {e.type}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-sm font-semibold uppercase tracking-wide text-slate-500 transition-colors duration-300 dark:text-slate-400">
+                  <td className="px-4 py-4 sm:px-6 text-sm font-semibold uppercase tracking-wide text-slate-500 transition-colors duration-300 dark:text-slate-400">
                     {e.zone}
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-4 py-4 sm:px-6">
                     <span
-                      className={`inline-block rounded border px-3 py-1 text-xs font-bold uppercase tracking-widest ${
+                      className={`inline-block whitespace-nowrap rounded border px-3 py-1 text-xs font-bold uppercase tracking-widest ${
                         e.active
                           ? 'border-red-200 bg-red-100 text-red-600 dark:border-red-500/40 dark:bg-red-500/15 dark:text-red-300'
                           : 'border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300'

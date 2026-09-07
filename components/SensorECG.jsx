@@ -178,7 +178,7 @@ export default function SensorECG({ activeCount, totalCount, connected }) {
 
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition-colors duration-300 dark:border-slate-700 dark:bg-slate-800">
-      <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-2 transition-colors duration-300 dark:border-slate-700 dark:bg-slate-900">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2 transition-colors duration-300 dark:border-slate-700 dark:bg-slate-900">
         <div className="flex items-center gap-2">
           <div className="rounded-lg border border-slate-200 bg-white p-1.5 shadow-sm transition-colors duration-300 dark:border-slate-700 dark:bg-slate-800">
             <Activity size={16} className="text-slate-600 transition-colors duration-300 dark:text-slate-400" />
@@ -187,7 +187,7 @@ export default function SensorECG({ activeCount, totalCount, connected }) {
             Sensor Activity Monitor
           </h2>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide transition-colors duration-300 ${pill}`}>
             {activeCount}/{totalCount} ACTIVE
           </span>
@@ -197,7 +197,7 @@ export default function SensorECG({ activeCount, totalCount, connected }) {
         </div>
       </div>
       <div className="p-3">
-        <canvas ref={canvasRef} width={600} height={60} className="h-auto w-full" />
+        <canvas ref={canvasRef} width={600} height={60} className="block h-auto w-full max-w-full" />
       </div>
     </div>
   );

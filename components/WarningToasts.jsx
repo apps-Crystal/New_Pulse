@@ -10,7 +10,7 @@ export default function WarningToasts({ warnings }) {
   if (!warnings || warnings.length === 0) return null;
 
   return (
-    <div className="pointer-events-none fixed right-4 top-24 z-[99999] flex w-80 flex-col gap-3">
+    <div className="pointer-events-none fixed right-4 top-24 z-[99999] flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-3">
       {warnings.map((w, i) => {
         const nearHigh = w.setHigh != null && w.temperature != null && w.temperature >= w.setHigh - WARN_MARGIN;
 
