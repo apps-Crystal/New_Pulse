@@ -8,12 +8,13 @@ import WarningToasts from './WarningToasts';
 import AlarmSiren from './AlarmSiren';
 import EventsTable from './EventsTable';
 import { zoneStatus, fmtClock } from '../lib/format';
+import { connectLive, liveTransport } from '../lib/live-client';
 
-// Two ways in, one shape out. The plant collector pushes readings over a WebSocket (/ws) the moment it
-// reads them; while that feed is delivering, the database is not polled at all. The instant the socket
-// closes, errors, or goes quiet for LIVE_STALE_MS, the usual /api/plc polling takes over - same rooms,
-// same alarm rules - and the socket keeps reconnecting in the background until the feed is back.
-// On Vercel there is no socket server, so the dashboard is simply always on the polling path.
+// Two ways in, one shape out. The plant collector's readings arrive live - through Supabase Realtime
+// (the Vercel deployment) or the self-hosted /ws hub - and while that feed is delivering, the database
+// is not polled at all. The instant the feed reports itself down, or goes quiet for LIVE_STALE_MS, the
+// usual /api/plc polling takes over (same rooms, same alarm rules) and the feed keeps reconnecting in the
+// background until readings flow again.
 
 // Poll interval. Override at build time with NEXT_PUBLIC_POLL_MS (e.g. 10000 on Vercel, where every
 // poll is a serverless function call). Values below 1000 are ignored.
@@ -21,26 +22,22 @@ const POLL_MS = (() => {
   const n = Number(process.env.NEXT_PUBLIC_POLL_MS);
   return Number.isFinite(n) && n >= 1000 ? n : 2000;
 })();
-// A live snapshot older than this means the socket is open but the collector has stopped pushing:
+// A live snapshot older than this means the feed is up but the collector has stopped pushing:
 // poll the database until fresh pushes resume. The collector visits each screen every ~35 s.
 const LIVE_STALE_MS = (() => {
   const n = Number(process.env.NEXT_PUBLIC_LIVE_STALE_MS);
   return Number.isFinite(n) && n >= 5000 ? n : 90000;
 })();
-// Optional: a full ws:// URL when the feed lives on another host. Default: same host, path /ws.
-const LIVE_WS_URL = process.env.NEXT_PUBLIC_LIVE_WS || '';
+const STALE_MS = (() => {
+  const n = Number(process.env.NEXT_PUBLIC_STALE_MS);
+  return Number.isFinite(n) && n >= 1000 ? n : 600000;
+})();
 const MAX_EVENTS = 50;
-
-function liveUrl() {
-  if (LIVE_WS_URL) return LIVE_WS_URL;
-  const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-  return `${proto}://${window.location.host}/ws`;
-}
 
 export default function Dashboard() {
   const [rooms, setRooms] = useState([]);        // ordered array of room objects (with id)
   const [connected, setConnected] = useState(false);
-  const [source, setSource] = useState(null);    // 'live' (socket) | 'db' (polling) | null (nothing yet)
+  const [source, setSource] = useState(null);    // 'live' | 'db' | null (nothing yet)
   const [alarms, setAlarms] = useState([]);
   const [warnings, setWarnings] = useState([]);
   const [events, setEvents] = useState([]);
@@ -49,7 +46,11 @@ export default function Dashboard() {
   const sinceRef = useRef(new Map());            // zoneId -> alarm start ts
   const prevStatusRef = useRef(new Map());       // zoneId -> last status
   const eventSeq = useRef(0);
-  const liveRef = useRef({ ws: null, open: false, lastAt: 0, backoff: 1000, timer: null, stopped: false });
+  const liveRef = useRef({ up: false, lastAt: 0 });
+  // Operator limits for snapshots built in the browser: fetched from /api/setpoints, and as a fallback
+  // whatever limits the last database snapshot carried.
+  const setpointsRef = useRef({});
+  const dbLimitsRef = useRef({});
 
   // One place turns a snapshot (from either source) into cards, alarms and events.
   const applySnapshot = useCallback((data, from) => {
@@ -59,6 +60,11 @@ export default function Dashboard() {
     const roomMap = data.rooms || {};
     const list = Object.entries(roomMap).map(([id, r]) => ({ id, ...r }));
     setRooms(list);
+    if (from === 'db') {
+      const lim = {};
+      for (const r of list) if (r.setLow != null || r.setHigh != null) lim[r.id] = { setLow: r.setLow, setHigh: r.setHigh };
+      dbLimitsRef.current = lim;
+    }
 
     const now = Date.now();
     const nextAlarms = [];
@@ -139,78 +145,55 @@ export default function Dashboard() {
 
   const liveHealthy = () => {
     const l = liveRef.current;
-    return l.open && Date.now() - l.lastAt < LIVE_STALE_MS;
+    return l.up && Date.now() - l.lastAt < LIVE_STALE_MS;
   };
 
-  // The live feed: subscribe to /ws and keep reconnecting with backoff for as long as the page is open.
+  // Operator set-points for browser-built snapshots. Retried on failure; refreshed every 5 minutes so an
+  // edited setpoints file / env var reaches open tabs without a reload.
   useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.WebSocket !== 'function') return undefined;
-    const l = liveRef.current;
-    l.stopped = false;
-
-    const schedule = () => {
-      if (l.stopped) return;
-      clearTimeout(l.timer);
-      l.timer = setTimeout(connect, l.backoff);
-      l.backoff = Math.min(l.backoff * 2, 30000);
-    };
-
-    const connect = () => {
-      if (l.stopped) return;
-      let ws;
+    let stopped = false;
+    let timer = null;
+    const load = async (delayOnFail) => {
       try {
-        ws = new WebSocket(liveUrl());
+        const res = await fetch('/api/setpoints', { cache: 'no-store' });
+        const j = await res.json();
+        if (j && j.setpoints) setpointsRef.current = j.setpoints;
+        if (!stopped) timer = setTimeout(() => load(15000), 5 * 60 * 1000);
       } catch {
-        schedule();
-        return;
+        if (!stopped) timer = setTimeout(() => load(Math.min(delayOnFail * 2, 120000)), delayOnFail);
       }
-      l.ws = ws;
-      ws.onopen = () => {
-        l.open = true;
-        l.backoff = 1000;
-      };
-      ws.onmessage = (ev) => {
-        let msg;
-        try { msg = JSON.parse(ev.data); } catch { return; }
-        if (!msg) return;
-        if (msg.type === 'snapshot') {
-          l.lastAt = Date.now();
-          applySnapshot(msg, 'live');
-        } else if (msg.type === 'status' && msg.publisher === false) {
-          // The collector dropped off the hub: switch to the database right away rather than waiting
-          // for the live data to age out.
+    };
+    load(5000);
+    return () => { stopped = true; clearTimeout(timer); };
+  }, []);
+
+  // The live feed. Its transport reconnects on its own; we only track whether to trust it.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !liveTransport()) return undefined;
+    const l = liveRef.current;
+    const conn = connectLive({
+      staleMs: STALE_MS,
+      getSetpoints: () => (Object.keys(setpointsRef.current).length ? setpointsRef.current : dbLimitsRef.current),
+      onSnapshot: (snapshot) => {
+        l.up = true;
+        l.lastAt = Date.now();
+        applySnapshot(snapshot, 'live');
+      },
+      onStatus: ({ up }) => {
+        l.up = up;
+        if (!up) {
+          // Switch to the database right away rather than waiting for the live data to age out.
           l.lastAt = 0;
           poll();
         }
-      };
-      ws.onerror = () => {
-        try { ws.close(); } catch { /* ignore */ }
-      };
-      ws.onclose = () => {
-        l.open = false;
-        l.ws = null;
-        l.lastAt = 0;
-        if (!l.stopped) {
-          poll();
-          schedule();
-        }
-      };
-    };
-
-    connect();
-    return () => {
-      l.stopped = true;
-      clearTimeout(l.timer);
-      const ws = l.ws;
-      l.ws = null;
-      l.open = false;
-      if (ws) { try { ws.close(); } catch { /* ignore */ } }
-    };
+      },
+    });
+    return () => conn.close();
   }, [applySnapshot, poll]);
 
   // The database poll: runs on its usual interval, but does nothing while the live feed is healthy.
-  // The first tick fires immediately, so the screen fills from the database before the socket has
-  // even connected; the first live snapshot then takes over.
+  // The first tick fires immediately, so the screen fills from the database before the feed has even
+  // connected; the first live snapshot then takes over.
   useEffect(() => {
     const tick = () => {
       if (!liveHealthy()) poll();
@@ -232,7 +215,7 @@ export default function Dashboard() {
       ? 'Live feed connected but the collector has gone quiet - showing last-known state.'
       : 'Database unreachable - showing last-known state. Check DATABASE_URL in .env.local and that this PC can reach Supabase (port 5432, IPv6).';
   } else if (source === 'live') {
-    footer = `Live from the plant collector over WebSocket · ${offlineCount ? `${offlineCount} zone(s) awaiting data · ` : ''}database kept as the record and the fallback`;
+    footer = `Live from the plant collector · ${offlineCount ? `${offlineCount} zone(s) awaiting data · ` : ''}database kept as the record and the fallback`;
   } else {
     footer = `Reading from Supabase · ${offlineCount ? `${offlineCount} zone(s) awaiting data · ` : ''}polling every ${Math.round(POLL_MS / 1000)}s · live feed not connected`;
   }

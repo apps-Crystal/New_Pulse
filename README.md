@@ -11,52 +11,69 @@ Pulse is a Next.js 14 dashboard that shows the live temperature of the 16 cold-s
 +---------------------------+      +-----------------------------+      +------------------------+
 ```
 
-## Live feed from the plant collector (WebSocket) with the database as fallback
+## Live feed from the plant collector, with the database as the fallback
 
-The plant collector (`apps-Crystal/pulse-server`, running on the PC next to the HMI) pushes every batch of
-readings to this dashboard the moment it reads them, over an outbound WebSocket to `ws://<dashboard>:3000/ws`.
-While that feed is delivering, the browser shows those readings and does **not** poll the database at all.
-The instant the socket closes, errors, or goes quiet, the dashboard falls back to polling `GET /api/plc` -
-the same database path as before, with the same rooms and alarm rules - and keeps trying to reconnect the
-socket in the background. The database is always written by the collector regardless, so it stays the
-record and the fallback.
+The plant collector (`apps-Crystal/pulse-server`, on the PC next to the HMI) pushes every batch of readings
+to this dashboard the moment it reads them. While that feed is delivering, the browser shows those readings
+and does **not** poll the database at all. The instant the feed reports itself down, or goes quiet, the
+dashboard falls back to polling `GET /api/plc` - the same database path as before, same rooms, same alarm
+rules - and keeps the feed reconnecting in the background. The collector always writes Postgres regardless,
+so the database stays the record and the fallback. The header pill says which path is on screen:
+`Live · socket` or `Live · DB`.
+
+Two transports deliver the feed; the browser picks the first one that is configured:
+
+### On Vercel: Supabase Realtime (the deployment in use)
+
+Vercel functions cannot hold a WebSocket open, but Supabase can. The collector broadcasts each batch on a
+**private** Supabase Realtime channel (`pulse:readings`) using its service-role key; every browser subscribes
+with the public anon key and builds the snapshot itself (`lib/live-snapshot.js` - the same builder the
+database rows go through). Nothing runs on Vercel for this beyond the static page.
 
 ```
-collector (plant PC) --ws://.../ws, token--> node server.js (this app) --push--> every open dashboard tab
-        |                                          |
-        +------- always, every reading ----------> Supabase Postgres <--- GET /api/plc when no live feed
+collector --HTTPS broadcast (service key)--> Supabase Realtime --WebSocket--> every browser tab
+    |                                                                              |
+    +---------------- always, every reading ----------------> Postgres <---- GET /api/plc when no feed
 ```
 
-- Readings received over the socket go through the **same** snapshot builder as database rows
-  (`rowsToSnapshot` in `lib/schema-detect.js`), so zone names, OFFLINE rules and set-points are identical
-  on both paths. The header pill says which one is on screen: `Live · socket` or `Live · DB`.
-- The feed needs a long-lived process: `npm start` now runs `node server.js` (Next.js plus the `/ws` hub).
-  `start-pulse.bat` already uses `npm start`. **Vercel** has no long-lived server, so there the dashboard is
-  always on the polling path - nothing to configure, it just never sees a socket.
-- The collector must present a shared secret. Put the same value in both places:
-  `PULSE_LIVE_TOKEN` in this app's `.env.local`, `LIVE_WS_TOKEN` in the collector's `.env`.
-  With no token configured the hub refuses every publisher (safe default) and the dashboard polls.
-- Only one collector is attached at a time; a restarted collector replaces the previous connection.
-- `GET /api/live` returns the newest pushed snapshot (503 until something arrives, always 503 on Vercel).
-  `GET /api/health` now includes a `live` block: `publisher`, `live`, `lastReadingsAt`, `feedAgeMs`,
-  `subscribers`, `rejectedPublishers`.
-- If the collector is set to record set-points (`RECORD_SETPOINTS=true`), the `"<room> Set Low"` /
-  `"<room> Set High"` tags it sends become that room's limits on the live path and win over `setpoints.json`,
-  matching the rule that database limits win over the file.
+Setup, once:
+
+1. In Supabase (SQL editor, as the project owner) run the collector's `sql/realtime.sql`. It enables
+   row-level security on `readings` - required, because shipping the anon key would otherwise expose the
+   table read/write through Supabase's REST API - and adds the one policy that lets anon keys *listen* on
+   `pulse:readings`. Publishing needs the service-role key, which only the collector holds.
+2. Vercel -> Project Settings -> Environment Variables: `NEXT_PUBLIC_SUPABASE_URL` and
+   `NEXT_PUBLIC_SUPABASE_ANON_KEY` (both public by design), then redeploy (they are build-time).
+3. Collector `.env`: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` (secret), optional `SUPABASE_CHANNEL`.
+
+The collector logs `rt:sent` on every batch it broadcast. `GET /api/setpoints` serves the operator limits
+to the browser so live snapshots carry the same LOW/HIGH as the database ones. With the collector set to
+record set-points, its `"<room> Set Low/High"` tags become that room's limits on the live path and win over
+`setpoints.json`, matching the rule that database limits win over the file.
+
+### Self-hosted (`node server.js`): the built-in /ws hub
+
+When the dashboard runs as a long-lived process on a PC, the collector can dial it directly instead:
+`npm start` runs `node server.js` (Next.js plus the `/ws` hub in `lib/live.js`), the build sets
+`NEXT_PUBLIC_LIVE_HUB=true` so browsers use it, the collector connects with
+`LIVE_WS_URL=ws://<dashboard-pc>:3000/ws` and a shared secret (`PULSE_LIVE_TOKEN` here, `LIVE_WS_TOKEN`
+there; unset = every publisher refused), and the hub pushes ready snapshots to every tab. Only one collector
+is attached at a time; a restarted collector replaces the previous connection. `GET /api/live` returns the
+newest pushed snapshot (503 until something arrives) and `GET /api/health` gains a `live` block.
 
 Settings (all optional, see `.env.example`):
 
 | Variable | Meaning |
 | --- | --- |
-| `PULSE_LIVE_TOKEN` | Shared secret the collector must present. Unset = collector refused |
-| `PULSE_LIVE_STALE_MS` | No readings for this long -> feed considered down, `connected` false (default 90000) |
-| `NEXT_PUBLIC_LIVE_STALE_MS` | Browser: a live snapshot older than this triggers database polling (build-time, default 90000) |
-| `NEXT_PUBLIC_LIVE_WS` | Browser: full `ws://` URL when the feed is on another host (default: same host, `/ws`) |
-| `PULSE_LIVE_PATH` | Hub path (default `/ws`) |
-
-Collector side (in `pulse-server`'s `.env`): `LIVE_WS_URL=ws://<this-pc-ip>:3000/ws` and
-`LIVE_WS_TOKEN=<the same secret>`. The collector logs `live=sent` on every batch it pushed and `live=down`
-while it cannot, and keeps writing to Postgres either way.
+| `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Enable the Supabase Realtime transport (build-time, public) |
+| `NEXT_PUBLIC_PULSE_CHANNEL` | Channel topic, must match the collector (default `pulse:readings`) |
+| `NEXT_PUBLIC_PULSE_CHANNEL_PRIVATE` | `false` only for a public channel (default `true`) |
+| `NEXT_PUBLIC_STALE_MS` | Browser: a live reading older than this is OFFLINE (default 600000) |
+| `NEXT_PUBLIC_LIVE_STALE_MS` | Browser: no live snapshot for this long -> poll the database (default 90000) |
+| `PULSE_LIVE_TOKEN` | Self-hosted hub: shared secret the collector must present |
+| `PULSE_LIVE_STALE_MS` | Self-hosted hub: no readings for this long -> `connected` false (default 90000) |
+| `NEXT_PUBLIC_LIVE_HUB` | Self-hosted only: `true` lets the browser use the built-in `/ws` hub (off by default) |
+| `NEXT_PUBLIC_LIVE_WS` | Browser: full `ws://` URL when the hub is on another host (implies the above) |
 
 ## Zones (16)
 
@@ -199,6 +216,9 @@ The app deploys as a normal Next.js project; the API routes become serverless fu
    - `NEXT_PUBLIC_POLL_MS=10000` - poll every 10 s instead of 2 s; every poll is a function call.
    - `PULSE_SETPOINTS` - alarm limits as `frozen_room_1=-25:-15,chiller_room_1=0:8,...`
      (a `setpoints.json` file is not used on Vercel).
+   - `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` - turn on the live feed through
+     Supabase Realtime (see *Live feed* above; run `sql/realtime.sql` first). Without them the dashboard
+     polls the database every `NEXT_PUBLIC_POLL_MS`.
 2. Deploy: `npx vercel --prod` from this folder, or connect the GitHub repo in the Vercel dashboard.
 3. Check `https://<your-app>.vercel.app/api/health` - `connected: true` and `detected.table: readings`.
 
@@ -220,7 +240,10 @@ project settings if the temperatures should not be visible to anyone with the li
 
 - `app/layout.js`, `app/page.js`, `app/globals.css` - Next.js app shell and global styles
 - `server.js` - custom Next.js server: the app plus the `/ws` live feed hub (`npm start`)
-- `lib/live.js` - live feed hub: authenticates the collector, keeps the newest reading per room, pushes snapshots to dashboards
+- `lib/live-snapshot.js` - pure, isomorphic: live readings -> the /api/plc room shape (browser and hub)
+- `lib/live-client.js` - browser transports: Supabase Realtime (Vercel) or the self-hosted /ws hub
+- `lib/live.js` - self-hosted live feed hub: authenticates the collector, pushes snapshots to dashboards
+- `app/api/setpoints/route.js` - operator limits for browser-built live snapshots
 - `app/api/plc/route.js` - JSON snapshot polled by the dashboard when the live feed is absent
 - `app/api/live/route.js` - the newest live snapshot (503 until the collector has pushed)
 - `app/api/health/route.js` - connection / detection status
