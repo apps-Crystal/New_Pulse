@@ -25,8 +25,8 @@ function fmtSetpoint(v) {
 function SetpointTile({ icon: Icon, label, value }) {
   return (
     <div className="flex flex-col items-center gap-0.5">
-      <div className="relative rounded-md bg-white/20 p-1.5 backdrop-blur-sm">
-        <Icon size={20} className="text-white drop-shadow-sm" strokeWidth={2.5} />
+      <div className="relative rounded-md bg-white/20 p-1.5 backdrop-blur-sm lg:p-1">
+        <Icon size={20} className="text-white drop-shadow-sm lg:h-4 lg:w-4" strokeWidth={2.5} />
       </div>
       <span className="scale-90 text-[9px] font-bold uppercase tracking-wider text-white/90">{label}</span>
       <span className="tabular font-mono text-xs font-bold text-white drop-shadow-sm">{value}</span>
@@ -50,16 +50,16 @@ export default function RoomCard({ room }) {
 
   return (
     <div
-      className={`flex transform flex-col justify-between overflow-hidden rounded-lg text-white shadow-md transition-all duration-300 hover:-translate-y-1 hover:shadow-lg ${cardColor(status, room.type)}`}
+      className={`flex transform flex-col justify-between overflow-hidden rounded-lg text-white shadow-md transition-all duration-300 hover:-translate-y-1 hover:shadow-lg lg:h-full lg:min-h-0 ${cardColor(status, room.type)}`}
     >
       <div>
         {/* Title bar */}
-        <div className="flex items-center justify-between border-b border-white/10 bg-black/10 px-3 py-2">
+        <div className="flex items-center justify-between border-b border-white/10 bg-black/10 px-3 py-2 lg:px-2.5 lg:py-1">
           <span className="truncate pr-2 text-xs font-bold uppercase tracking-widest text-white drop-shadow-md">
             {room.label}
           </span>
           <div
-            className={`shrink-0 rounded border border-white/20 px-2 py-1 backdrop-blur-md ${
+            className={`shrink-0 rounded border border-white/20 px-2 py-1 backdrop-blur-md lg:py-0.5 ${
               status === 'offline' ? 'bg-black/40' : 'bg-white/20'
             }`}
           >
@@ -69,7 +69,7 @@ export default function RoomCard({ room }) {
 
         {/* Alert banner */}
         {banner && (
-          <div className={`flex items-center gap-2 bg-black/20 px-3 py-1 ${status === 'offline' ? '' : 'animate-pulse'}`}>
+          <div className={`flex items-center gap-2 bg-black/20 px-3 py-1 lg:px-2.5 lg:py-0.5 ${status === 'offline' ? '' : 'animate-pulse'}`}>
             <AlertTriangle size={12} className="text-white" />
             <span className="text-[10px] font-bold uppercase tracking-wide text-white">{banner}</span>
           </div>
@@ -77,15 +77,15 @@ export default function RoomCard({ room }) {
       </div>
 
       {/* LOW setpoint | temperature centrepiece | HIGH setpoint */}
-      <div className="grid flex-grow grid-cols-[1fr_auto_1fr] items-center gap-2 border-t border-white/10 bg-black/10 px-3 py-3">
+      <div className="grid min-h-0 flex-grow grid-cols-[1fr_auto_1fr] items-center gap-2 border-t border-white/10 bg-black/10 px-3 py-3 lg:px-2.5 lg:py-1.5">
         <SetpointTile icon={TypeIcon} label="Low" value={fmtSetpoint(room.setLow)} />
 
-        <div className="flex flex-col items-center gap-1">
-          <div className="relative rounded-md bg-white/20 p-2 backdrop-blur-sm">
-            <Thermometer size={20} className="text-white drop-shadow-sm" strokeWidth={2.5} />
+        <div className="flex flex-col items-center gap-1 lg:gap-0.5">
+          <div className="relative rounded-md bg-white/20 p-2 backdrop-blur-sm lg:p-1.5">
+            <Thermometer size={20} className="text-white drop-shadow-sm lg:h-4 lg:w-4" strokeWidth={2.5} />
           </div>
           <span
-            className={`tabular whitespace-nowrap font-mono text-2xl font-black tracking-tight drop-shadow-md ${
+            className={`tabular whitespace-nowrap font-mono text-2xl font-black leading-tight tracking-tight drop-shadow-md lg:text-[clamp(1.25rem,3vh,2.75rem)] lg:leading-none ${
               status === 'offline' ? 'text-white/50' : 'text-white'
             }`}
           >

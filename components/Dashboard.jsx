@@ -121,27 +121,32 @@ export default function Dashboard() {
   const normalCount = rooms.filter((r) => zoneStatus(r) === 'ok').length;
 
   return (
-    <div className="min-h-screen font-sans transition-colors duration-300">
+    <div className="min-h-screen font-sans transition-colors duration-300 lg:flex lg:h-screen lg:flex-col lg:overflow-hidden">
       <Header connected={connected} alarmsMuted={alarmsMuted} onToggleAlarms={() => setAlarmsMuted((m) => !m)} />
 
-      <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">
-        <MetricCards total={total} normal={normalCount} alarm={alarmCount} warning={warnCount} />
+      <main className="scrollbar-thin mx-auto w-full max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:gap-3 lg:space-y-0 lg:overflow-y-auto lg:pb-8 lg:pt-3">
+        {/* First screen: metrics + ECG strip + 4x4 grid. At lg+ this section is exactly the height of <main>, so all 16 zones fit without scrolling. */}
+        <div className="space-y-6 lg:flex lg:h-full lg:min-h-0 lg:shrink-0 lg:flex-col lg:gap-3 lg:space-y-0">
+          <MetricCards total={total} normal={normalCount} alarm={alarmCount} warning={warnCount} />
 
-        {/* ECG sensor activity monitor: health = zones reporting / total zones */}
-        <SensorECG activeCount={rooms.length - offlineCount} totalCount={total} connected={connected} />
+          {/* ECG sensor activity monitor: health = zones reporting / total zones */}
+          <SensorECG activeCount={rooms.length - offlineCount} totalCount={total} connected={connected} />
 
-        {/* Room grid */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {rooms.length === 0
-            ? Array.from({ length: 16 }).map((_, i) => (
-                <div key={i} className="h-40 animate-pulse rounded-lg bg-slate-200 dark:bg-slate-800" />
-              ))
-            : rooms.map((room) => <RoomCard key={room.id} room={room} />)}
+          {/* Room grid */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:min-h-0 lg:flex-1 lg:grid-cols-4 lg:grid-rows-4 lg:gap-3">
+            {rooms.length === 0
+              ? Array.from({ length: 16 }).map((_, i) => (
+                  <div key={i} className="h-40 animate-pulse rounded-lg bg-slate-200 dark:bg-slate-800 lg:h-full" />
+                ))
+              : rooms.map((room) => <RoomCard key={room.id} room={room} />)}
+          </div>
         </div>
 
-        <EventsTable events={events} />
+        <div className="lg:shrink-0">
+          <EventsTable events={events} />
+        </div>
 
-        <div className="pb-6 text-center text-xs font-medium text-slate-400 dark:text-slate-500">
+        <div className="pb-6 text-center text-xs font-medium text-slate-400 dark:text-slate-500 lg:shrink-0">
           {connected
             ? `Reading live from Supabase · ${offlineCount ? `${offlineCount} zone(s) awaiting data · ` : ''}polling every ${Math.round(POLL_MS / 1000)}s`
             : 'Database unreachable - showing last-known state. Check DATABASE_URL in .env.local and that this PC can reach Supabase (port 5432, IPv6).'}

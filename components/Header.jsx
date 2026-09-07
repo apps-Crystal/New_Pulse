@@ -27,20 +27,20 @@ export default function Header({ connected, alarmsMuted, onToggleAlarms }) {
   }
 
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-200 bg-white shadow-sm transition-colors duration-300 dark:border-[#3A4178] dark:bg-[#252B59]">
-      <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6">
+    <header className="sticky top-0 z-50 shrink-0 border-b border-slate-200 bg-white shadow-sm transition-colors duration-300 dark:border-[#3A4178] dark:bg-[#252B59]">
+      <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6 lg:py-1.5">
         <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2 sm:gap-x-4">
           {/* Left: logo group + mini ECG */}
           <div className="flex shrink-0 items-center gap-4">
-            <div className="group relative flex h-14 w-44 items-center justify-start overflow-hidden sm:w-80">
+            <div className="group relative flex h-14 w-44 items-center justify-start overflow-hidden sm:w-80 lg:h-11">
               <img
                 src="/pulse-logo.png"
                 alt="Crystal Pulse"
-                className="absolute left-0 top-[60%] h-36 w-auto max-w-none -translate-y-1/2 object-contain drop-shadow-sm transition-all duration-300 invert hover:scale-105 sm:h-56 dark:invert-0"
+                className="absolute left-0 top-[60%] h-36 w-auto max-w-none -translate-y-1/2 object-contain drop-shadow-sm transition-all duration-300 invert hover:scale-105 sm:h-56 lg:h-44 dark:invert-0"
               />
 
               {/* LIVE indicator - sports broadcast style */}
-              <div className="absolute left-3 top-3 z-10 sm:left-4">
+              <div className="absolute left-3 top-3 z-10 sm:left-4 lg:top-2">
                 <div className="flex animate-pulse items-center gap-1 rounded bg-red-600 px-2 py-0.5 shadow-lg">
                   <div className="h-1.5 w-1.5 rounded-full bg-white" />
                   <span className="text-[9px] font-black uppercase tracking-wider text-white">LIVE</span>
@@ -97,7 +97,7 @@ export default function Header({ connected, alarmsMuted, onToggleAlarms }) {
               )}
             </button>
 
-            <div className="hidden rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-right transition-colors duration-300 sm:block dark:border-slate-700 dark:bg-slate-800">
+            <div className="hidden rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-right transition-colors duration-300 sm:block lg:py-1 dark:border-slate-700 dark:bg-slate-800">
               <div className="text-[8px] font-bold uppercase tracking-widest text-slate-400">System Time</div>
               <div className="tabular font-mono text-sm font-bold tracking-tight text-slate-700 transition-colors duration-300 dark:text-slate-200" suppressHydrationWarning>
                 {clock}

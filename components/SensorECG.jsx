@@ -106,10 +106,25 @@ export default function SensorECG({ activeCount, totalCount, connected }) {
     if (!canvas) return;
 
     const ctx = canvas.getContext('2d');
-    const width = canvas.width;
-    const height = canvas.height;
+
+    // Keep the drawing buffer at the displayed size so the trace stays crisp whether the
+    // strip is 40px tall on the kiosk or width-scaled on a phone.
+    const syncSize = () => {
+      const w = Math.round(canvas.clientWidth);
+      const h = Math.round(canvas.clientHeight);
+      if (w > 0 && h > 0 && (Math.abs(canvas.width - w) > 1 || Math.abs(canvas.height - h) > 1)) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+    };
+    syncSize();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(syncSize) : null;
+    if (ro) ro.observe(canvas);
 
     const animate = () => {
+      const width = canvas.width;
+      const height = canvas.height;
+
       // Clear
       ctx.fillStyle = darkMode ? '#1e293b' : '#f8fafc';
       ctx.fillRect(0, 0, width, height);
@@ -165,6 +180,7 @@ export default function SensorECG({ activeCount, totalCount, connected }) {
 
     return () => {
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
+      if (ro) ro.disconnect();
     };
   }, [status, healthRaw, darkMode]);
 
@@ -177,17 +193,18 @@ export default function SensorECG({ activeCount, totalCount, connected }) {
         : 'bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-300';
 
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition-colors duration-300 dark:border-slate-700 dark:bg-slate-800">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2 transition-colors duration-300 dark:border-slate-700 dark:bg-slate-900">
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition-colors duration-300 dark:border-slate-700 dark:bg-slate-800 lg:flex lg:items-stretch lg:rounded-lg">
+      {/* Title + pills: a header bar below lg, a side column at lg+ */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2 transition-colors duration-300 dark:border-slate-700 dark:bg-slate-900 lg:w-72 lg:shrink-0 lg:flex-col lg:items-start lg:justify-center lg:gap-1 lg:border-b-0 lg:border-r lg:px-3 lg:py-1">
         <div className="flex items-center gap-2">
-          <div className="rounded-lg border border-slate-200 bg-white p-1.5 shadow-sm transition-colors duration-300 dark:border-slate-700 dark:bg-slate-800">
+          <div className="rounded-lg border border-slate-200 bg-white p-1.5 shadow-sm transition-colors duration-300 dark:border-slate-700 dark:bg-slate-800 lg:rounded-md lg:p-1">
             <Activity size={16} className="text-slate-600 transition-colors duration-300 dark:text-slate-400" />
           </div>
-          <h2 className="text-xs font-bold uppercase tracking-widest text-slate-700 transition-colors duration-300 dark:text-slate-300">
+          <h2 className="text-xs font-bold uppercase tracking-widest text-slate-700 transition-colors duration-300 dark:text-slate-300 lg:text-[11px]">
             Sensor Activity Monitor
           </h2>
         </div>
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 lg:gap-2">
           <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide transition-colors duration-300 ${pill}`}>
             {activeCount}/{totalCount} ACTIVE
           </span>
@@ -196,8 +213,8 @@ export default function SensorECG({ activeCount, totalCount, connected }) {
           </span>
         </div>
       </div>
-      <div className="p-3">
-        <canvas ref={canvasRef} width={600} height={60} className="block h-auto w-full max-w-full" />
+      <div className="p-3 lg:flex lg:min-w-0 lg:flex-1 lg:items-center lg:p-2">
+        <canvas ref={canvasRef} width={600} height={60} className="block h-auto w-full max-w-full lg:h-10" />
       </div>
     </div>
   );
