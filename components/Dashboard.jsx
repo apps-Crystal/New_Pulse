@@ -28,7 +28,9 @@ const LIVE_STALE_MS = (() => {
   const n = Number(process.env.NEXT_PUBLIC_LIVE_STALE_MS);
   return Number.isFinite(n) && n >= 5000 ? n : 90000;
 })();
-const STALE_MS = (() => {
+// OFFLINE threshold for browser-built snapshots. Only the fallback before /api/setpoints has answered:
+// from then on the server's PULSE_STALE_MS is used, so every path applies the same rule.
+const STALE_MS_DEFAULT = (() => {
   const n = Number(process.env.NEXT_PUBLIC_STALE_MS);
   return Number.isFinite(n) && n >= 1000 ? n : 600000;
 })();
@@ -37,7 +39,7 @@ const MAX_EVENTS = 50;
 export default function Dashboard() {
   const [rooms, setRooms] = useState([]);        // ordered array of room objects (with id)
   const [connected, setConnected] = useState(false);
-  const [source, setSource] = useState(null);    // 'live' | 'db' | null (nothing yet)
+  const [source, setSource] = useState(null);    // 'live' | 'db' | null (nothing has answered yet)
   const [alarms, setAlarms] = useState([]);
   const [warnings, setWarnings] = useState([]);
   const [events, setEvents] = useState([]);
@@ -47,10 +49,12 @@ export default function Dashboard() {
   const prevStatusRef = useRef(new Map());       // zoneId -> last status
   const eventSeq = useRef(0);
   const liveRef = useRef({ up: false, lastAt: 0 });
+  const pollBusyRef = useRef(false);
   // Operator limits for snapshots built in the browser: fetched from /api/setpoints, and as a fallback
-  // whatever limits the last database snapshot carried.
+  // whatever limits the last successful database snapshot carried.
   const setpointsRef = useRef({});
   const dbLimitsRef = useRef({});
+  const staleMsRef = useRef(STALE_MS_DEFAULT);
 
   // One place turns a snapshot (from either source) into cards, alarms and events.
   const applySnapshot = useCallback((data, from) => {
@@ -60,10 +64,11 @@ export default function Dashboard() {
     const roomMap = data.rooms || {};
     const list = Object.entries(roomMap).map(([id, r]) => ({ id, ...r }));
     setRooms(list);
-    if (from === 'db') {
-      const lim = {};
-      for (const r of list) if (r.setLow != null || r.setHigh != null) lim[r.id] = { setLow: r.setLow, setHigh: r.setHigh };
-      dbLimitsRef.current = lim;
+    if (from === 'db' && data.connected) {
+      // Remember database-provided limits per room (merge, never wipe) so live snapshots keep them.
+      const merged = { ...dbLimitsRef.current };
+      for (const r of list) if (r.setLow != null || r.setHigh != null) merged[r.id] = { setLow: r.setLow, setHigh: r.setHigh };
+      dbLimitsRef.current = merged;
     }
 
     const now = Date.now();
@@ -129,13 +134,25 @@ export default function Dashboard() {
     }
   }, []);
 
-  // The fallback: read the newest rows from the database.
+  // The fallback: read the newest rows from the database. One request in flight at a time, and a reply
+  // that is no longer the freshest information (a live snapshot landed while it was in flight) is dropped
+  // rather than allowed to overwrite the screen.
   const poll = useCallback(async () => {
-    let data;
+    if (pollBusyRef.current) return;
+    pollBusyRef.current = true;
+    const startedAt = Date.now();
+    let data = null;
     try {
       const res = await fetch('/api/plc', { cache: 'no-store' });
       data = await res.json();
     } catch {
+      data = null;
+    } finally {
+      pollBusyRef.current = false;
+    }
+    const l = liveRef.current;
+    if (l.up && l.lastAt >= startedAt) return;
+    if (!data) {
       setConnected(false);
       setSource('db');
       return;
@@ -148,8 +165,8 @@ export default function Dashboard() {
     return l.up && Date.now() - l.lastAt < LIVE_STALE_MS;
   };
 
-  // Operator set-points for browser-built snapshots. Retried on failure; refreshed every 5 minutes so an
-  // edited setpoints file / env var reaches open tabs without a reload.
+  // Operator set-points (and the server's OFFLINE threshold) for browser-built snapshots. Retried on
+  // failure; refreshed every 5 minutes so an edited setpoints file / env var reaches open tabs.
   useEffect(() => {
     let stopped = false;
     let timer = null;
@@ -158,6 +175,7 @@ export default function Dashboard() {
         const res = await fetch('/api/setpoints', { cache: 'no-store' });
         const j = await res.json();
         if (j && j.setpoints) setpointsRef.current = j.setpoints;
+        if (j && Number.isFinite(Number(j.staleMs)) && Number(j.staleMs) > 0) staleMsRef.current = Number(j.staleMs);
         if (!stopped) timer = setTimeout(() => load(15000), 5 * 60 * 1000);
       } catch {
         if (!stopped) timer = setTimeout(() => load(Math.min(delayOnFail * 2, 120000)), delayOnFail);
@@ -172,20 +190,24 @@ export default function Dashboard() {
     if (typeof window === 'undefined' || !liveTransport()) return undefined;
     const l = liveRef.current;
     const conn = connectLive({
-      staleMs: STALE_MS,
+      getStaleMs: () => staleMsRef.current,
       getSetpoints: () => (Object.keys(setpointsRef.current).length ? setpointsRef.current : dbLimitsRef.current),
       onSnapshot: (snapshot) => {
-        l.up = true;
-        l.lastAt = Date.now();
+        // Only a snapshot that says the collector is delivering counts as evidence the feed is healthy;
+        // a replayed last-known snapshot with connected:false must not silence the database poll.
+        if (snapshot && snapshot.connected) {
+          l.up = true;
+          l.lastAt = Date.now();
+        }
         applySnapshot(snapshot, 'live');
       },
       onStatus: ({ up }) => {
+        const was = l.up;
         l.up = up;
-        if (!up) {
-          // Switch to the database right away rather than waiting for the live data to age out.
-          l.lastAt = 0;
-          poll();
-        }
+        if (!up) l.lastAt = 0;
+        // Poll immediately on the up -> down edge only; the interval below covers the steady state, and a
+        // channel that never manages to subscribe must not double the database traffic on every retry.
+        if (was && !up) poll();
       },
     });
     return () => conn.close();
@@ -210,7 +232,9 @@ export default function Dashboard() {
   const normalCount = rooms.filter((r) => zoneStatus(r) === 'ok').length;
 
   let footer;
-  if (!connected) {
+  if (source === null) {
+    footer = 'Connecting - waiting for the first reading...';
+  } else if (!connected) {
     footer = source === 'live'
       ? 'Live feed connected but the collector has gone quiet - showing last-known state.'
       : 'Database unreachable - showing last-known state. Check DATABASE_URL in .env.local and that this PC can reach Supabase (port 5432, IPv6).';

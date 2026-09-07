@@ -9,11 +9,15 @@ const GREEN = { color: '#34d399', background: 'rgba(16,185,129,0.12)', borderCol
 const GREEN_DOT = { background: '#34d399', boxShadow: '0 0 8px rgba(52,211,153,0.9)' };
 const RED = { color: '#f87171', background: 'rgba(239,68,68,0.12)', borderColor: 'rgba(239,68,68,0.4)' };
 const RED_DOT = { background: '#f87171', boxShadow: '0 0 8px rgba(248,113,113,0.9)' };
+const GREY = { color: '#94a3b8', background: 'rgba(148,163,184,0.10)', borderColor: 'rgba(148,163,184,0.3)' };
+const GREY_DOT = { background: '#94a3b8' };
 
 // Where the numbers on screen are coming from right now.
-//   live  - pushed by the plant collector over the WebSocket
-//   db    - polled from the Supabase database (the fallback, and the only path on Vercel)
+//   null  - nothing has answered yet (first paint / server render): not a fault, just connecting
+//   live  - pushed by the plant collector (Supabase Realtime or the self-hosted hub)
+//   db    - polled from the Supabase database (the fallback)
 function feedPill(connected, source) {
+  if (source === null) return { style: GREY, dot: GREY_DOT, text: 'Connecting', title: 'Waiting for the first reading' };
   if (!connected) {
     return source === 'live'
       ? { style: RED, dot: RED_DOT, text: 'Feed stalled', title: 'Collector connected but not sending' }
