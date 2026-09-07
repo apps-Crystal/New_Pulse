@@ -55,6 +55,9 @@ export default function Dashboard() {
   const setpointsRef = useRef({});
   const dbLimitsRef = useRef({});
   const staleMsRef = useRef(STALE_MS_DEFAULT);
+  // The last rooms the database gave us, as collector-style readings: the live feed seeds itself from
+  // these so the first (half-screen) broadcast does not blank the other rooms.
+  const dbSeedRef = useRef([]);
 
   // One place turns a snapshot (from either source) into cards, alarms and events.
   const applySnapshot = useCallback((data, from) => {
@@ -69,6 +72,9 @@ export default function Dashboard() {
       const merged = { ...dbLimitsRef.current };
       for (const r of list) if (r.setLow != null || r.setHigh != null) merged[r.id] = { setLow: r.setLow, setHigh: r.setHigh };
       dbLimitsRef.current = merged;
+      dbSeedRef.current = list
+        .filter((r) => r.temperature != null && r.updatedAt != null)
+        .map((r) => ({ tag: r.label, value: r.temperature, ts: r.updatedAt }));
     }
 
     const now = Date.now();
@@ -191,6 +197,7 @@ export default function Dashboard() {
     const l = liveRef.current;
     const conn = connectLive({
       getStaleMs: () => staleMsRef.current,
+      getSeed: () => dbSeedRef.current,
       getSetpoints: () => (Object.keys(setpointsRef.current).length ? setpointsRef.current : dbLimitsRef.current),
       onSnapshot: (snapshot) => {
         // Only a snapshot that says the collector is delivering counts as evidence the feed is healthy;

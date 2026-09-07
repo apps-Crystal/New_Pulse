@@ -64,3 +64,19 @@ test('live-snapshot: newest wins, limit tags fold into the room, stale readings 
   assert.equal(rooms.frozen_room_4.offline, true);
   assert.equal(Object.keys(rooms).length, 16);
 });
+
+test('live-snapshot: a seed from the database fills rooms the first broadcast does not carry, and a fresh broadcast wins', () => {
+  const state = snap.createLiveState();
+  // What the dashboard seeds from its last database snapshot (label, temperature, updatedAt).
+  snap.ingest(state, [
+    { tag: 'Frozen Room 1', value: -19.0, ts: NOW - 20000 },
+    { tag: 'Chiller Room 3', value: 26.0, ts: NOW - 20000 },
+  ], NOW);
+  // The first broadcast: one panel screen only, with a newer Frozen Room 1.
+  snap.ingest(state, [{ tag: 'Frozen Room 1', value: -19.8, ts: NOW }], NOW);
+  const { rooms } = snap.buildRooms(state, { now: NOW, staleMs: 600000 });
+  assert.equal(rooms.frozen_room_1.temperature, -19.8);   // broadcast overrides the seed
+  assert.equal(rooms.chiller_room_3.temperature, 26.0);    // seeded room keeps its database value...
+  assert.equal(rooms.chiller_room_3.updatedAt, NOW - 20000); // ...with the database's timestamp
+  assert.equal(rooms.chiller_room_3.offline, false);
+});
