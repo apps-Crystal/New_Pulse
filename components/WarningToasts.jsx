@@ -1,43 +1,37 @@
 'use client';
-import { Thermometer } from 'lucide-react';
-import { fmtTemp, WARN_MARGIN } from '../lib/format';
+import { WARN_MARGIN } from '../lib/format';
 
 /**
- * Right-side floating warning stack for near-limit temperatures (source WarningSystem, yellow severity).
+ * Right-side floating warning stack for near-limit temperatures.
  * No timer: warning start times are not tracked.
  */
 export default function WarningToasts({ warnings }) {
   if (!warnings || warnings.length === 0) return null;
 
   return (
-    <div className="pointer-events-none fixed right-4 top-24 z-[99999] flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-3">
+    <div className="pointer-events-none fixed right-4 top-[7.5rem] z-[9998] flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-3 md:top-20">
       {warnings.map((w, i) => {
         const nearHigh = w.setHigh != null && w.temperature != null && w.temperature >= w.setHigh - WARN_MARGIN;
+        const t = w.temperature;
 
         return (
           <div
             key={w.id || i}
-            className="animate-slide-in-right pointer-events-auto flex items-start gap-3 rounded-lg border-l-[6px] border-yellow-700 bg-yellow-500/90 p-3 text-black shadow-xl backdrop-blur-md transition-all duration-300 hover:scale-105"
+            className="animate-slide-in-right pointer-events-auto flex items-center justify-between gap-3 rounded-[14px] border px-4 py-3"
+            style={{ background: 'rgba(17,23,48,0.96)', borderColor: 'rgba(234,179,8,0.6)' }}
           >
-            <div className="mt-0.5 rounded-md bg-black/10 p-1.5">
-              <Thermometer size={20} className="text-black" strokeWidth={2.5} />
+            <div className="min-w-0">
+              <div className="truncate text-[15px] font-medium leading-tight text-white">{w.label}</div>
+              <div className="mt-1 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-[#facc15]">
+                <span className="h-2 w-2 rounded-full" style={{ background: '#eab308', boxShadow: '0 0 8px rgba(234,179,8,0.6)' }} />
+                {nearHigh ? 'Near high' : 'Near low'}
+              </div>
             </div>
-
-            <div className="min-w-0 flex-1">
-              <div className="mb-0.5 flex items-center justify-between">
-                <h4 className="truncate pr-2 text-xs font-black uppercase tracking-wider">{w.label}</h4>
-                <span className="rounded bg-black/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest opacity-80">
-                  WARNING
-                </span>
-              </div>
-
-              <div className="mt-1 flex items-center gap-2">
-                <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-black" />
-                <span className="font-mono text-xs font-bold uppercase">
-                  {nearHigh ? 'Approaching set high' : 'Approaching set low'}
-                </span>
-                <span className="tabular ml-auto font-mono text-sm font-black">{fmtTemp(w.temperature)}</span>
-              </div>
+            <div className="flex shrink-0 items-baseline gap-1">
+              <span className="tabular font-mono text-2xl font-bold leading-none text-[#facc15]">
+                {t == null || Number.isNaN(t) ? '—' : t.toFixed(1)}
+              </span>
+              <span className="text-[12px] text-slate-400">°C</span>
             </div>
           </div>
         );

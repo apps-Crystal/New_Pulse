@@ -77,10 +77,17 @@ export default function AlarmSiren({ active }) {
     return (
       <button
         onClick={() => {}}
-        className="fixed inset-0 z-[100000] flex flex-col items-center justify-center gap-4 bg-red-700/95 text-white"
+        className="fixed inset-0 z-[100000] flex flex-col items-center justify-center gap-5 text-white"
+        style={{ background: 'linear-gradient(180deg, rgba(127,29,29,0.97) 0%, #2a0707 100%)' }}
       >
-        <Volume2 className="h-24 w-24 animate-alarm" />
-        <span className="font-mono text-3xl font-black uppercase tracking-widest">Tap to enable alarm sound</span>
+        <span
+          className="flex h-24 w-24 items-center justify-center rounded-full border"
+          style={{ background: 'rgba(11,15,30,0.7)', borderColor: 'rgba(239,68,68,0.6)' }}
+        >
+          <Volume2 className="h-12 w-12 animate-alarm text-[#f87171]" />
+        </span>
+        <span className="text-xl font-semibold uppercase tracking-[0.2em] text-white md:text-2xl">Tap to enable alarm sound</span>
+        <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-300">Browser audio needs one tap</span>
       </button>
     );
   }
@@ -88,9 +95,9 @@ export default function AlarmSiren({ active }) {
   // Small unobtrusive arm button when idle and not yet armed.
   if (!armed) {
     return (
-      <div className="fixed bottom-4 right-4 z-[100000] lg:bottom-1 lg:left-1/2 lg:right-auto lg:-translate-x-1/2">
-        <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white/90 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500 shadow-lg backdrop-blur-md dark:border-slate-700 dark:bg-slate-800/90 dark:text-slate-400">
-          <VolumeX size={14} /> Sound muted — click anywhere to arm
+      <div className="fixed bottom-4 right-4 z-[100000] lg:bottom-2 lg:left-1/2 lg:right-auto lg:-translate-x-1/2">
+        <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-300 backdrop-blur-md">
+          <VolumeX size={14} /> Sound muted · click anywhere to arm
         </div>
       </div>
     );

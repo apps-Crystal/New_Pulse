@@ -175,7 +175,7 @@ project settings if the temperatures should not be visible to anyone with the li
 - `app/api/plc/route.js` - JSON snapshot polled by the dashboard
 - `app/api/health/route.js` - connection / detection status
 - `components/Dashboard.jsx` - polling, status classification, alarms and events
-- `components/Header.jsx` - brand, DB ONLINE/OFFLINE pill, alarm mute, theme, clock
+- `components/Header.jsx` - logo tile, brand, LIVE / DB pill, alarms toggle pill, clock
 - `components/MetricCards.jsx`, `components/RoomCard.jsx`, `components/EventsTable.jsx` - display widgets
 - `components/AlarmModal.jsx`, `components/WarningToasts.jsx`, `components/AlarmSiren.jsx` - alarm UI and siren
 - `lib/db.js` - Postgres pool, schema auto-detection, tiered reads, snapshot builder (applies the operator set-points)
@@ -190,4 +190,4 @@ project settings if the temperatures should not be visible to anyone with the li
 
 ## UI
 
-The dashboard's look is ported from the Pulse warehouse design (branch `ui-pulse`): Arial/Helvetica body font, the `public/pulse-logo.png` logo group with the LIVE badge in a sticky white header (`#252B59` in dark mode), gradient SCADA metric cards, the ECG-style "Sensor Activity Monitor" (`components/SensorECG.jsx`, health = zones reporting / total zones), solid-colour zone cards with LOW / temperature / HIGH tiles, the full-screen red alarm takeover, right-side warning toasts and the "Today's Events" table. Brand colours live in `tailwind.config.js` as `pulse.orange` / `pulse.blue` (plus `-light` / `-dark` variants). Dark mode toggles the `dark` class on `<html>` and persists to `localStorage.theme`. The data flow, `/api/plc` contract, polling and alarm rules are unchanged.
+The dashboard is a dark-only kiosk design on a deep navy ground: a slim header with the Crystal logo tile, the LIVE / DB pill, the alarms toggle pill and a large mono clock, then four flat metric cards and a 4x4 grid of zone cards that fill the screen without scrolling, each showing the zone name, a status dot, the temperature in JetBrains Mono, the set-point range and a NEAR / TEMP TOO status label, with warning and alarm states tinted yellow and red. Text uses Space Grotesk and numbers use JetBrains Mono (both from Google Fonts with system fallbacks); the full-screen alarm takeover, the warning toasts and the "Today's Events" table share the same dark card language, and the data flow, `/api/plc` contract, polling and alarm rules are unchanged.

@@ -2,26 +2,36 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Source look: Arial/Helvetica, #f3f4f6 ground in light mode, slate-900 in dark mode. */
+/* Dark-only kiosk theme: deep navy ground with a subtle lighter gradient toward the top-left. */
 html,
 body {
   margin: 0;
   padding: 0;
 }
 
-body {
-  color: #1f2937;
-  background: #f3f4f6;
-  font-family: Arial, Helvetica, sans-serif;
+html {
+  color-scheme: dark;
+  background: #0b0f1e;
 }
 
-.dark body {
-  color: #f1f5f9;
-  background: #0f172a;
+body {
+  color: #e2e8f0;
+  background-color: #0b0f1e;
+  background-image: radial-gradient(120% 90% at 0% 0%, #101a33 0%, #0b0f1e 65%);
+  background-attachment: fixed;
+  font-family: 'Space Grotesk', system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
 }
 
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+/* Shared card surface. */
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
 }
 
 /* Generic alarm pulse (used by the AlarmSiren arm prompt). */
@@ -33,7 +43,7 @@ body {
   animation: alarmPulse 1s ease-in-out infinite;
 }
 
-/* Custom scrollbar utility (ported from the source design). */
+/* Custom scrollbar utility. */
 .scrollbar-thin::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -42,9 +52,6 @@ body {
   background: transparent;
 }
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background-color: #cbd5e1;
+  background-color: rgba(255, 255, 255, 0.14);
   border-radius: 20px;
-}
-.dark .scrollbar-thin::-webkit-scrollbar-thumb {
-  background-color: #475569;
 }

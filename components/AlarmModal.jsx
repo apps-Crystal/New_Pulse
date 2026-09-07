@@ -1,14 +1,12 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { AlertTriangle, Thermometer } from 'lucide-react';
-import { fmtTemp } from '../lib/format';
 
 /**
  * FULL-SCREEN alert takeover - covers 100% of the viewport.
  * No close button, no clickable elements. Disappears only when every alarm clears.
  * Below `md` the alarm grid collapses to a single column and the takeover scrolls vertically.
  */
-function AlertTimer({ startTime }) {
+function AlertTimer({ startTime, className = '' }) {
   const [elapsed, setElapsed] = useState(Math.floor((Date.now() - startTime) / 1000));
 
   useEffect(() => {
@@ -29,65 +27,58 @@ function AlertTimer({ startTime }) {
   };
 
   return (
-    <span className="rounded-lg border-2 border-white/20 bg-red-600 px-3 py-1 font-mono text-2xl font-black tracking-widest text-white shadow-lg">
+    <span
+      className={`tabular inline-block whitespace-nowrap rounded-full border px-3 py-1 font-mono font-semibold leading-none text-white ${className}`}
+      style={{ background: 'rgba(239,68,68,0.18)', borderColor: 'rgba(239,68,68,0.5)' }}
+    >
       {formatTime(elapsed)}
     </span>
   );
 }
 
-function fmtSetpoint(v) {
-  return v == null || Number.isNaN(v) ? '—' : `${v.toFixed(1)}°`;
+function fmtSide(v) {
+  return v == null || Number.isNaN(v) ? '—' : v.toFixed(1);
 }
 
-// Dynamic sizing configuration based on alarm count (source layout config, made responsive:
-// phone sizes first, the source's desktop sizes from `md` up).
+// Dynamic sizing configuration based on alarm count (phone sizes first, desktop sizes from `md` up).
 function getLayoutConfig(count) {
   // Single alarm: maximum size, centred
   if (count === 1) {
     return {
-      container: 'flex justify-center items-center w-full max-w-5xl md:h-full',
+      container: 'flex justify-center items-center w-full max-w-4xl md:h-full',
       card: 'w-full md:max-h-[60vh] flex flex-col justify-center p-6 gap-5 md:p-12 md:gap-8',
-      icon: 56,
-      iconMd: 80,
-      title: 'text-4xl md:text-6xl',
-      badge: 'px-3 py-1 text-base md:px-6 md:py-2 md:text-2xl',
-      msg: 'text-2xl pl-4 border-l-4 py-1 md:text-5xl md:pl-8 md:border-l-[6px] md:py-2',
-      temp: 'text-5xl md:text-7xl',
-      range: 'text-base md:text-2xl',
-      timer: 'scale-125 md:scale-[2.0]',
-      live: 'scale-125 gap-2 md:scale-150 md:gap-3',
+      title: 'text-3xl md:text-5xl',
+      msg: 'text-base md:text-2xl',
+      temp: 'text-6xl md:text-8xl',
+      unit: 'text-xl md:text-3xl',
+      range: 'text-sm md:text-lg',
+      timer: 'text-lg md:text-2xl',
     };
   }
   // Two alarms: split screen, large
   if (count === 2) {
     return {
-      container: 'grid content-center grid-cols-1 md:grid-cols-2 gap-6 md:gap-10 w-full max-w-[90vw] items-center',
+      container: 'grid content-center grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 w-full max-w-[90vw] items-center',
       card: 'md:aspect-[16/10] flex flex-col justify-between p-5 gap-4 md:p-8 md:gap-6',
-      icon: 44,
-      iconMd: 64,
-      title: 'text-3xl md:text-4xl',
-      badge: 'px-3 py-1 text-sm md:px-4 md:text-lg',
-      msg: 'text-xl pl-4 border-l-4 md:text-3xl md:pl-6 md:border-l-[5px]',
-      temp: 'text-4xl md:text-5xl',
-      range: 'text-sm md:text-lg',
-      timer: 'scale-110 md:scale-150',
-      live: 'scale-110 gap-2 md:scale-125',
+      title: 'text-2xl md:text-3xl',
+      msg: 'text-sm md:text-lg',
+      temp: 'text-5xl md:text-7xl',
+      unit: 'text-lg md:text-2xl',
+      range: 'text-sm md:text-base',
+      timer: 'text-base md:text-xl',
     };
   }
   // 3-4 alarms: 2x2 grid
   if (count <= 4) {
     return {
-      container: 'grid content-center grid-cols-1 md:grid-cols-2 md:auto-rows-fr gap-4 md:gap-6 w-full max-w-[90vw] md:h-full md:max-h-[70vh]',
+      container: 'grid content-center grid-cols-1 md:grid-cols-2 md:auto-rows-fr gap-4 md:gap-5 w-full max-w-[90vw] md:h-full md:max-h-[70vh]',
       card: 'flex flex-col justify-between p-5 gap-3 md:p-6 md:gap-4',
-      icon: 40,
-      iconMd: 48,
-      title: 'text-2xl md:text-3xl',
-      badge: 'px-3 py-1 text-sm',
-      msg: 'text-xl md:text-2xl pl-4 border-l-4',
-      temp: 'text-3xl md:text-4xl',
+      title: 'text-xl md:text-2xl',
+      msg: 'text-sm md:text-base',
+      temp: 'text-4xl md:text-6xl',
+      unit: 'text-base md:text-xl',
       range: 'text-sm',
-      timer: 'scale-100 md:scale-125',
-      live: 'scale-100 gap-2 md:scale-110',
+      timer: 'text-sm md:text-lg',
     };
   }
   // 5-6 alarms: 3x2 grid
@@ -95,30 +86,24 @@ function getLayoutConfig(count) {
     return {
       container: 'grid content-center grid-cols-1 sm:grid-cols-2 md:grid-cols-3 md:auto-rows-fr gap-4 w-full max-w-[95vw] md:h-full md:max-h-[75vh]',
       card: 'flex flex-col justify-between p-5 gap-3',
-      icon: 36,
-      iconMd: 40,
-      title: 'text-2xl md:text-4xl',
-      badge: 'px-3 py-1 text-sm',
-      msg: 'text-xl md:text-3xl pl-3 border-l-4',
-      temp: 'text-3xl md:text-4xl',
+      title: 'text-xl md:text-2xl',
+      msg: 'text-sm',
+      temp: 'text-4xl md:text-5xl',
+      unit: 'text-base md:text-lg',
       range: 'text-sm',
-      timer: 'scale-100 md:scale-110',
-      live: 'scale-100 gap-1',
+      timer: 'text-sm md:text-base',
     };
   }
   // 7+ alarms: compact grid
   return {
     container: 'grid content-center grid-cols-1 sm:grid-cols-2 md:grid-cols-4 md:auto-rows-fr gap-3 w-full max-w-[98vw] md:h-full md:max-h-[85vh]',
     card: 'flex flex-col justify-between p-4 gap-2',
-    icon: 32,
-    iconMd: 36,
-    title: 'text-2xl md:text-3xl',
-    badge: 'px-2 py-0.5 text-xs',
-    msg: 'text-lg md:text-2xl pl-3 border-l-4',
-    temp: 'text-3xl',
+    title: 'text-lg md:text-xl',
+    msg: 'text-xs md:text-sm',
+    temp: 'text-4xl md:text-5xl',
+    unit: 'text-base',
     range: 'text-xs',
-    timer: 'scale-100',
-    live: 'scale-90 gap-1',
+    timer: 'text-xs md:text-sm',
   };
 }
 
@@ -129,39 +114,36 @@ export default function AlarmModal({ alarms }) {
 
   return (
     <div
-      className="fixed inset-0 z-[9999] select-none overflow-y-auto overflow-x-hidden bg-gradient-to-b from-red-700 via-red-600 to-red-800"
-      style={{ pointerEvents: 'all', cursor: 'default' }}
+      className="fixed inset-0 z-[9999] select-none overflow-y-auto overflow-x-hidden"
+      style={{
+        pointerEvents: 'all',
+        cursor: 'default',
+        background: 'linear-gradient(180deg, rgba(127,29,29,0.96) 0%, rgba(69,10,10,0.98) 60%, #2a0707 100%)',
+      }}
     >
-      {/* Scan lines */}
-      <div
-        className="pointer-events-none fixed inset-0 opacity-5"
-        style={{
-          backgroundImage:
-            'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.3) 2px, rgba(0,0,0,0.3) 4px)',
-        }}
-      />
-
-      {/* Pulsing border around the entire screen */}
-      <div className="pointer-events-none fixed inset-0 animate-pulse border-[8px] border-white/30" />
+      {/* Pulsing frame around the entire screen */}
+      <div className="pointer-events-none fixed inset-0 animate-pulse border-[6px]" style={{ borderColor: 'rgba(239,68,68,0.55)' }} />
 
       {/* Content - fills the entire screen (scrolls on phones) */}
       <div className="pointer-events-none relative z-10 flex min-h-full w-full flex-col items-center justify-between px-4 py-6 md:px-8 md:py-8">
         {/* Header section */}
-        <div className="flex w-full flex-col items-center gap-4 md:gap-6">
-          <div className="flex items-center justify-center gap-3 rounded-full border border-white/10 bg-black/30 px-5 py-2 text-center backdrop-blur-md md:gap-4 md:px-12">
-            <AlertTriangle size={18} className="hidden animate-pulse text-white sm:block" strokeWidth={3} />
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white md:text-xs md:tracking-[0.4em]">
-              ⚠ ALERT ACTIVE — DO NOT IGNORE ⚠
-            </span>
-            <AlertTriangle size={18} className="hidden animate-pulse text-white sm:block" strokeWidth={3} />
+        <div className="flex w-full flex-col items-center gap-3 md:gap-4">
+          <div
+            className="inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.25em] text-[#fca5a5]"
+            style={{ background: 'rgba(0,0,0,0.3)', borderColor: 'rgba(239,68,68,0.45)' }}
+          >
+            <span className="h-2 w-2 animate-pulse rounded-full" style={{ background: '#ef4444', boxShadow: '0 0 8px rgba(239,68,68,0.9)' }} />
+            Alert active · Do not ignore
           </div>
 
-          <div className="inline-flex items-center gap-3 rounded-full border-2 border-white/30 bg-black/40 px-5 py-2 shadow-xl backdrop-blur-md md:px-8 md:py-3">
-            <div className="h-3 w-3 animate-pulse rounded-full bg-white" />
-            <span className="whitespace-nowrap text-sm font-black uppercase tracking-[0.2em] text-white md:text-lg md:tracking-[0.3em]">
-              {alarms.length} Active {alarms.length === 1 ? 'Alert' : 'Alerts'}
+          <div
+            className="inline-flex items-center gap-3 rounded-full border px-5 py-2 md:px-7 md:py-2.5"
+            style={{ background: 'rgba(11,15,30,0.7)', borderColor: 'rgba(239,68,68,0.55)' }}
+          >
+            <span className="tabular font-mono text-2xl font-bold leading-none text-white md:text-3xl">{alarms.length}</span>
+            <span className="text-[12px] font-semibold uppercase tracking-[0.2em] text-slate-200 md:text-sm">
+              Active {alarms.length === 1 ? 'alarm' : 'alarms'}
             </span>
-            <div className="h-3 w-3 animate-pulse rounded-full bg-white" />
           </div>
         </div>
 
@@ -170,57 +152,47 @@ export default function AlarmModal({ alarms }) {
           {alarms.map((a, i) => {
             const outHigh = a.setHigh != null && a.temperature != null && a.temperature > a.setHigh;
             const message = outHigh ? 'TEMP TOO HIGH' : 'TEMP TOO LOW';
+            const t = a.temperature;
 
             return (
               <div
                 key={a.id || i}
-                className={`relative w-full min-w-0 overflow-hidden rounded-3xl border-2 border-white/20 bg-black/40 shadow-2xl backdrop-blur-md ${layout.card}`}
+                className={`relative w-full min-w-0 overflow-hidden rounded-[14px] border ${layout.card}`}
+                style={{ background: 'rgba(11,15,30,0.82)', borderColor: 'rgba(239,68,68,0.6)' }}
               >
+                {/* Title row: name + dot */}
                 <div className="flex w-full items-start justify-between gap-3">
-                  {/* Icon (phone size below md, source size from md up) */}
-                  <div className="flex flex-shrink-0 animate-pulse items-center justify-center rounded-2xl border border-white/20 bg-white/10 p-3">
-                    <Thermometer size={layout.icon} className="text-white drop-shadow-lg md:hidden" strokeWidth={2} />
-                    <Thermometer size={layout.iconMd} className="hidden text-white drop-shadow-lg md:block" strokeWidth={2} />
+                  <div className={`${layout.title} min-w-0 break-words font-semibold leading-tight text-white`}>
+                    {a.label || 'Unknown'}
                   </div>
-
-                  {/* Severity badge */}
                   <span
-                    className={`${layout.badge} animate-pulse whitespace-nowrap rounded-lg border border-red-400/50 bg-red-600/90 font-black uppercase tracking-[0.2em] text-white shadow-lg`}
-                  >
-                    CRITICAL
-                  </span>
+                    className="mt-1 h-3 w-3 shrink-0 animate-pulse rounded-full"
+                    style={{ background: '#ef4444', boxShadow: '0 0 10px rgba(239,68,68,0.9)' }}
+                  />
                 </div>
 
                 {/* Main content */}
-                <div className="flex w-full min-w-0 flex-1 flex-col justify-center">
-                  <div className={`${layout.title} mb-3 break-words font-black uppercase leading-none tracking-tight text-white drop-shadow-lg`}>
-                    {a.label || 'Unknown'}
-                  </div>
-                  <div className={`${layout.msg} border-white/30 font-bold uppercase tracking-widest text-white/90`}>
-                    {message}
-                  </div>
-                  <div className="mt-4 flex flex-wrap items-baseline gap-x-6 gap-y-1">
-                    <span className={`${layout.temp} tabular font-mono font-black leading-none text-white drop-shadow-lg`}>
-                      {fmtTemp(a.temperature)}
+                <div className="flex w-full min-w-0 flex-1 flex-col justify-center gap-2">
+                  <div className={`${layout.msg} font-bold uppercase tracking-[0.18em] text-[#f87171]`}>{message}</div>
+                  <div className="flex items-baseline gap-1">
+                    <span className={`${layout.temp} tabular whitespace-nowrap font-mono font-bold leading-none text-[#f87171]`}>
+                      {t == null || Number.isNaN(t) ? '—' : t.toFixed(1)}
                     </span>
-                    <span className={`${layout.range} font-mono font-bold uppercase tracking-widest text-white/70`}>
-                      range {fmtSetpoint(a.setLow)} … {fmtSetpoint(a.setHigh)}
-                    </span>
+                    <span className={`${layout.unit} font-medium text-slate-400`}>°C</span>
+                  </div>
+                  <div className={`${layout.range} tabular font-mono text-slate-400`}>
+                    Range {fmtSide(a.setLow)} — {fmtSide(a.setHigh)}
                   </div>
                 </div>
 
                 {/* Footer: LIVE + timer */}
-                <div className="mt-auto flex w-full items-center justify-between border-t border-white/10 pt-4">
-                  <div className={`flex items-center ${layout.live}`}>
-                    <div className="h-3 w-3 animate-pulse rounded-full bg-white shadow-lg shadow-white/50" />
-                    <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/60">LIVE</span>
+                <div className="mt-auto flex w-full items-center justify-between border-t border-white/[0.07] pt-3">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 animate-pulse rounded-full" style={{ background: '#ef4444', boxShadow: '0 0 8px rgba(239,68,68,0.9)' }} />
+                    <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-400">Live</span>
                   </div>
 
-                  {a.since && (
-                    <div className={`origin-right ${layout.timer}`}>
-                      <AlertTimer startTime={a.since} />
-                    </div>
-                  )}
+                  {a.since && <AlertTimer startTime={a.since} className={layout.timer} />}
                 </div>
               </div>
             );
@@ -228,8 +200,11 @@ export default function AlarmModal({ alarms }) {
         </div>
 
         {/* Bottom message */}
-        <div className="flex items-center justify-center rounded-full border border-white/10 bg-black/30 px-5 py-2 text-center backdrop-blur-md md:px-8">
-          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/60">
+        <div
+          className="flex items-center justify-center rounded-full border px-5 py-2 text-center md:px-8"
+          style={{ background: 'rgba(0,0,0,0.3)', borderColor: 'rgba(255,255,255,0.1)' }}
+        >
+          <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-300">
             This screen will clear automatically when all temperatures return to range
           </span>
         </div>
