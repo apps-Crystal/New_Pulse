@@ -108,6 +108,20 @@ test('live: publishers need the shared token; dashboards do not', () => {
   assert.deepEqual(live.classifyConnection(url('?role=publisher&token=s3cret-token'), armed), { role: 'publisher' });
 });
 
+test('live: two module instances in one process share the same hub (server.js vs the Next route bundle)', () => {
+  fresh();
+  const path = require.resolve('../lib/live');
+  live.ingest([{ tag: 'Frozen Room 1', value: -20, ts: NOW }], NOW);
+  // Simulate Next.js compiling its own copy of lib/live.js for a route handler.
+  delete require.cache[path];
+  const twin = require('../lib/live');
+  assert.notEqual(twin, live, 'the test must really load a second instance');
+  assert.ok(twin.getLatestSnapshot(NOW), 'the second instance must see readings pushed through the first');
+  assert.equal(twin.getLatestSnapshot(NOW).rooms.frozen_room_1.temperature, -20);
+  assert.equal(twin.getStatus(NOW).tags, 1);
+  delete require.cache[path]; // leave the cache as the other tests expect
+});
+
 test('live: getConfig reads the env with safe defaults', () => {
   fresh();
   const cfg = live.getConfig();
