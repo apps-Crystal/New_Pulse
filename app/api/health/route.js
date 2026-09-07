@@ -5,13 +5,14 @@ export const revalidate = 0;
 export const runtime = 'nodejs';
 
 import { getStatus } from '../../../lib/db';
+import { getStatus as getLiveStatus } from '../../../lib/live';
 
 const NO_STORE = { 'Cache-Control': 'no-store' };
 
 export async function GET() {
   try {
     return Response.json(
-      { ok: true, ...getStatus(), uptime: process.uptime(), node: process.version },
+      { ok: true, ...getStatus(), live: getLiveStatus(), uptime: process.uptime(), node: process.version },
       { headers: NO_STORE }
     );
   } catch (err) {

@@ -5,7 +5,25 @@ import { fmtClock } from '../lib/format';
 const PILL =
   'inline-flex items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide leading-none';
 
-export default function Header({ connected, alarmsMuted, onToggleAlarms }) {
+const GREEN = { color: '#34d399', background: 'rgba(16,185,129,0.12)', borderColor: 'rgba(16,185,129,0.35)' };
+const GREEN_DOT = { background: '#34d399', boxShadow: '0 0 8px rgba(52,211,153,0.9)' };
+const RED = { color: '#f87171', background: 'rgba(239,68,68,0.12)', borderColor: 'rgba(239,68,68,0.4)' };
+const RED_DOT = { background: '#f87171', boxShadow: '0 0 8px rgba(248,113,113,0.9)' };
+
+// Where the numbers on screen are coming from right now.
+//   live  - pushed by the plant collector over the WebSocket
+//   db    - polled from the Supabase database (the fallback, and the only path on Vercel)
+function feedPill(connected, source) {
+  if (!connected) {
+    return source === 'live'
+      ? { style: RED, dot: RED_DOT, text: 'Feed stalled', title: 'Collector connected but not sending' }
+      : { style: RED, dot: RED_DOT, text: 'DB offline', title: 'Database unreachable' };
+  }
+  if (source === 'live') return { style: GREEN, dot: GREEN_DOT, text: 'Live · socket', title: 'Readings pushed live by the plant collector' };
+  return { style: GREEN, dot: GREEN_DOT, text: 'Live · DB', title: 'Polling the database (live feed not connected)' };
+}
+
+export default function Header({ connected, source, alarmsMuted, onToggleAlarms }) {
   const [clock, setClock] = useState('--:--:--');
 
   useEffect(() => {
@@ -13,6 +31,8 @@ export default function Header({ connected, alarmsMuted, onToggleAlarms }) {
     const id = setInterval(() => setClock(fmtClock()), 1000);
     return () => clearInterval(id);
   }, []);
+
+  const pill = feedPill(connected, source);
 
   return (
     <header className="shrink-0">
@@ -28,27 +48,11 @@ export default function Header({ connected, alarmsMuted, onToggleAlarms }) {
           </div>
         </div>
 
-        {/* Right: DB pill, alarms toggle, clock */}
+        {/* Right: feed pill, alarms toggle, clock */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <div
-            className={PILL}
-            style={
-              connected
-                ? { color: '#34d399', background: 'rgba(16,185,129,0.12)', borderColor: 'rgba(16,185,129,0.35)' }
-                : { color: '#f87171', background: 'rgba(239,68,68,0.12)', borderColor: 'rgba(239,68,68,0.4)' }
-            }
-            title={connected ? 'Database connected' : 'Database unreachable'}
-            aria-label={connected ? 'DB online' : 'DB offline'}
-          >
-            <span
-              className="h-2 w-2 rounded-full"
-              style={
-                connected
-                  ? { background: '#34d399', boxShadow: '0 0 8px rgba(52,211,153,0.9)' }
-                  : { background: '#f87171', boxShadow: '0 0 8px rgba(248,113,113,0.9)' }
-              }
-            />
-            {connected ? 'Live · DB online' : 'DB offline'}
+          <div className={PILL} style={pill.style} title={pill.title} aria-label={pill.text}>
+            <span className="h-2 w-2 rounded-full" style={pill.dot} />
+            {pill.text}
           </div>
 
           <button

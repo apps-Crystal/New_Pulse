@@ -1,6 +1,6 @@
 # Pulse - Crystal Cold Storage Dashboard
 
-Pulse is a Next.js 14 dashboard that shows the live temperature of the 16 cold-storage zones at Crystal Cold Storage. It reads the readings straight from the Supabase Postgres database that already stores them, classifies every zone as OK / WARN / ALARM / OFFLINE, and raises on-screen alarms with a siren. The old WECON HMI "bridge" (a headless-Chrome scraper) is gone: there is no HMI client slot to keep free and nothing to scrape - the database is the single data source.
+Pulse is a Next.js 14 dashboard that shows the live temperature of the 16 cold-storage zones at Crystal Cold Storage. It shows the readings the plant collector pushes to it live over a WebSocket, falls back to reading them straight from the Supabase Postgres database (which the collector always writes) whenever that feed is absent, classifies every zone as OK / WARN / ALARM / OFFLINE, and raises on-screen alarms with a siren. The old WECON HMI "bridge" (a headless-Chrome scraper) is gone: the collector is the only thing that talks to the panel.
 
 ```
 +---------------------------+      +-----------------------------+      +------------------------+
@@ -10,6 +10,53 @@ Pulse is a Next.js 14 dashboard that shows the live temperature of the 16 cold-s
 |                           |      |   GET /api/plc, /api/health |      |   2 seconds            |
 +---------------------------+      +-----------------------------+      +------------------------+
 ```
+
+## Live feed from the plant collector (WebSocket) with the database as fallback
+
+The plant collector (`apps-Crystal/pulse-server`, running on the PC next to the HMI) pushes every batch of
+readings to this dashboard the moment it reads them, over an outbound WebSocket to `ws://<dashboard>:3000/ws`.
+While that feed is delivering, the browser shows those readings and does **not** poll the database at all.
+The instant the socket closes, errors, or goes quiet, the dashboard falls back to polling `GET /api/plc` -
+the same database path as before, with the same rooms and alarm rules - and keeps trying to reconnect the
+socket in the background. The database is always written by the collector regardless, so it stays the
+record and the fallback.
+
+```
+collector (plant PC) --ws://.../ws, token--> node server.js (this app) --push--> every open dashboard tab
+        |                                          |
+        +------- always, every reading ----------> Supabase Postgres <--- GET /api/plc when no live feed
+```
+
+- Readings received over the socket go through the **same** snapshot builder as database rows
+  (`rowsToSnapshot` in `lib/schema-detect.js`), so zone names, OFFLINE rules and set-points are identical
+  on both paths. The header pill says which one is on screen: `Live · socket` or `Live · DB`.
+- The feed needs a long-lived process: `npm start` now runs `node server.js` (Next.js plus the `/ws` hub).
+  `start-pulse.bat` already uses `npm start`. **Vercel** has no long-lived server, so there the dashboard is
+  always on the polling path - nothing to configure, it just never sees a socket.
+- The collector must present a shared secret. Put the same value in both places:
+  `PULSE_LIVE_TOKEN` in this app's `.env.local`, `LIVE_WS_TOKEN` in the collector's `.env`.
+  With no token configured the hub refuses every publisher (safe default) and the dashboard polls.
+- Only one collector is attached at a time; a restarted collector replaces the previous connection.
+- `GET /api/live` returns the newest pushed snapshot (503 until something arrives, always 503 on Vercel).
+  `GET /api/health` now includes a `live` block: `publisher`, `live`, `lastReadingsAt`, `feedAgeMs`,
+  `subscribers`, `rejectedPublishers`.
+- If the collector is set to record set-points (`RECORD_SETPOINTS=true`), the `"<room> Set Low"` /
+  `"<room> Set High"` tags it sends become that room's limits on the live path and win over `setpoints.json`,
+  matching the rule that database limits win over the file.
+
+Settings (all optional, see `.env.example`):
+
+| Variable | Meaning |
+| --- | --- |
+| `PULSE_LIVE_TOKEN` | Shared secret the collector must present. Unset = collector refused |
+| `PULSE_LIVE_STALE_MS` | No readings for this long -> feed considered down, `connected` false (default 90000) |
+| `NEXT_PUBLIC_LIVE_STALE_MS` | Browser: a live snapshot older than this triggers database polling (build-time, default 90000) |
+| `NEXT_PUBLIC_LIVE_WS` | Browser: full `ws://` URL when the feed is on another host (default: same host, `/ws`) |
+| `PULSE_LIVE_PATH` | Hub path (default `/ws`) |
+
+Collector side (in `pulse-server`'s `.env`): `LIVE_WS_URL=ws://<this-pc-ip>:3000/ws` and
+`LIVE_WS_TOKEN=<the same secret>`. The collector logs `live=sent` on every batch it pushed and `live=down`
+while it cannot, and keeps writing to Postgres either way.
 
 ## Zones (16)
 
@@ -101,7 +148,7 @@ Auto-detection can be overridden or pinned with these variables in `.env.local` 
 
 ## API
 
-`GET /api/plc` - polled by the dashboard every 2 s. Always returns HTTP 200; `connected` is false when the database could not be reached and the last-known rooms are returned.
+`GET /api/plc` - polled by the dashboard every 2 s **when the live feed is not delivering**. Always returns HTTP 200; `connected` is false when the database could not be reached and the last-known rooms are returned.
 
 ```json
 {
@@ -172,10 +219,13 @@ project settings if the temperatures should not be visible to anyone with the li
 ## Files
 
 - `app/layout.js`, `app/page.js`, `app/globals.css` - Next.js app shell and global styles
-- `app/api/plc/route.js` - JSON snapshot polled by the dashboard
+- `server.js` - custom Next.js server: the app plus the `/ws` live feed hub (`npm start`)
+- `lib/live.js` - live feed hub: authenticates the collector, keeps the newest reading per room, pushes snapshots to dashboards
+- `app/api/plc/route.js` - JSON snapshot polled by the dashboard when the live feed is absent
+- `app/api/live/route.js` - the newest live snapshot (503 until the collector has pushed)
 - `app/api/health/route.js` - connection / detection status
-- `components/Dashboard.jsx` - polling, status classification, alarms and events
-- `components/Header.jsx` - logo tile, brand, LIVE / DB pill, alarms toggle pill, clock
+- `components/Dashboard.jsx` - live feed subscription, database polling fallback, status classification, alarms and events
+- `components/Header.jsx` - logo tile, brand, feed pill (`Live · socket` / `Live · DB` / `DB offline`), alarms toggle pill, clock
 - `components/MetricCards.jsx`, `components/RoomCard.jsx`, `components/EventsTable.jsx` - display widgets
 - `components/AlarmModal.jsx`, `components/WarningToasts.jsx`, `components/AlarmSiren.jsx` - alarm UI and siren
 - `lib/db.js` - Postgres pool, schema auto-detection, tiered reads, snapshot builder (applies the operator set-points)
