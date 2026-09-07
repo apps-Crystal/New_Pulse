@@ -1,28 +1,23 @@
 import './globals.css';
 
 export const metadata = {
-  title: 'Pulse — Crystal Cold Storage Monitor',
-  description: 'Live temperature monitoring for the Crystal cold-storage facility',
+  title: 'Pulse | Cold Chain Monitor',
+  description: 'Real-time cold chain monitoring for the Crystal cold-storage facility',
+  icons: { icon: '/favicon.ico' },
 };
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* Fonts: Inter + JetBrains Mono. Loaded from Google Fonts; falls back to system fonts offline. */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700;800&display=swap"
-          rel="stylesheet"
-        />
+        {/* Dark-mode bootstrap: apply the `dark` class before first paint from localStorage / OS preference. */}
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var t=localStorage.theme;if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark');}}catch(e){}})();`,
           }}
         />
       </head>
-      <body className="bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100">
+      <body className="min-h-screen bg-[#f3f4f6] font-sans text-gray-800 antialiased transition-colors duration-300 dark:bg-slate-900 dark:text-slate-100">
         {children}
       </body>
     </html>

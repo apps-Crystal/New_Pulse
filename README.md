@@ -187,3 +187,7 @@ project settings if the temperatures should not be visible to anyone with the li
 - `scripts/db-check.js` - quick connectivity check (`npm run db:check`)
 - `.env.example` - environment contract; copy to `.env.local`
 - `start-pulse.bat` - one-click launcher for the plant PC (dev server + Chrome kiosk)
+
+## UI
+
+The dashboard's look is ported from the Pulse warehouse design (branch `ui-pulse`): Arial/Helvetica body font, the `public/pulse-logo.png` logo group with the LIVE badge in a sticky white header (`#252B59` in dark mode), gradient SCADA metric cards, the ECG-style "Sensor Activity Monitor" (`components/SensorECG.jsx`, health = zones reporting / total zones), solid-colour zone cards with LOW / temperature / HIGH tiles, the full-screen red alarm takeover, right-side warning toasts and the "Today's Events" table. Brand colours live in `tailwind.config.js` as `pulse.orange` / `pulse.blue` (plus `-light` / `-dark` variants). Dark mode toggles the `dark` class on `<html>` and persists to `localStorage.theme`. The data flow, `/api/plc` contract, polling and alarm rules are unchanged.

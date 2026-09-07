@@ -2,56 +2,49 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --font-sans: 'Inter', 'IBM Plex Sans', system-ui, Arial, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
-}
-
-html, body {
-  padding: 0;
+/* Source look: Arial/Helvetica, #f3f4f6 ground in light mode, slate-900 in dark mode. */
+html,
+body {
   margin: 0;
-  font-family: var(--font-sans);
+  padding: 0;
 }
 
-.font-mono, .tabular {
-  font-family: var(--font-mono);
+body {
+  color: #1f2937;
+  background: #f3f4f6;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.dark body {
+  color: #f1f5f9;
+  background: #0f172a;
+}
+
+.tabular {
   font-variant-numeric: tabular-nums;
 }
 
-/* LIVE badge pulse */
-@keyframes livePulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.55; transform: scale(0.92); }
-}
-.animate-live { animation: livePulse 1.5s ease-in-out infinite; }
-
-/* generic alarm pulse */
+/* Generic alarm pulse (used by the AlarmSiren arm prompt). */
 @keyframes alarmPulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }
 }
-.animate-alarm { animation: alarmPulse 1s ease-in-out infinite; }
-
-/* modal border pulse */
-@keyframes borderPulse {
-  0%, 100% { border-color: rgba(255,255,255,0.95); }
-  50% { border-color: rgba(255,255,255,0.35); }
-}
-.animate-border { animation: borderPulse 2s ease-in-out infinite; }
-
-/* toast slide-in */
-@keyframes toastIn {
-  from { transform: translateX(120%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
-}
-.animate-toast { animation: toastIn 0.35s ease-out; }
-
-/* scanline overlay for the alarm modal */
-.scanlines {
-  background-image: repeating-linear-gradient(
-    0deg, rgba(0,0,0,0.05) 0px, rgba(0,0,0,0.05) 1px, transparent 1px, transparent 3px
-  );
+.animate-alarm {
+  animation: alarmPulse 1s ease-in-out infinite;
 }
 
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: rgba(120,120,140,0.5); border-radius: 6px; }
+/* Custom scrollbar utility (ported from the source design). */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 20px;
+}
+.dark .scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: #475569;
+}

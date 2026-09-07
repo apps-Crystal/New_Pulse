@@ -1,56 +1,64 @@
 'use client';
 import { Activity, CheckCircle, AlertTriangle, Thermometer } from 'lucide-react';
 
-function Card({ icon: Icon, label, value, gradient, accent }) {
+// SCADA-style bold metric card (source design)
+function MetricCard({ icon: Icon, label, value, colorClass, shadowClass }) {
   return (
     <div
-      className="relative overflow-hidden rounded-xl p-5 text-white shadow-lg"
-      style={{ background: gradient, boxShadow: `0 8px 24px -8px ${accent}` }}
+      className={`relative flex items-center gap-3 overflow-hidden rounded-xl border border-white/20 p-4 text-white shadow-lg ${colorClass} ${shadowClass}`}
     >
-      <Icon className="absolute -right-2 -top-2 h-16 w-16 opacity-10" />
-      <div className="mb-3 grid h-8 w-8 place-items-center rounded-lg bg-white/10">
-        <Icon className="h-5 w-5" />
+      {/* Background icon watermark */}
+      <div className="absolute right-0 top-0 -translate-y-1/4 translate-x-1/4 transform p-2 opacity-10">
+        <Icon size={60} strokeWidth={3} />
       </div>
-      <div className="text-[10px] font-bold uppercase tracking-widest opacity-90">{label}</div>
-      <div className="mt-1 font-mono text-2xl font-black tabular">{value}</div>
+
+      {/* Icon tile */}
+      <div className="relative z-10 rounded-lg bg-white/10 p-2 backdrop-blur-sm">
+        <Icon size={32} strokeWidth={2.5} />
+      </div>
+
+      {/* Text */}
+      <div className="relative z-10 flex-1">
+        <div className="mb-1 text-xs font-bold uppercase tracking-wider opacity-90">{label}</div>
+        <div className="tabular text-2xl font-black tracking-tight">{value}</div>
+      </div>
     </div>
   );
 }
 
+const ORANGE = 'bg-gradient-to-br from-pulse-orange to-pulse-orange-dark';
+const ORANGE_SHADOW = 'shadow-pulse-orange/20';
+
 export default function MetricCards({ total, normal, alarm, warning }) {
   return (
-    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-      <Card
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <MetricCard
         icon={Activity}
         label="Total Zones"
         value={`${total}/${total}`}
-        gradient="linear-gradient(135deg, #252B59, #1A1E3F)"
-        accent="rgba(37,43,89,0.4)"
+        colorClass="bg-gradient-to-br from-pulse-blue to-pulse-blue-dark"
+        shadowClass="shadow-pulse-blue/20"
       />
-      <Card
+      <MetricCard
         icon={CheckCircle}
         label="Zones Normal"
         value={String(normal)}
-        gradient="linear-gradient(135deg, #F79B1E, #E68A0D)"
-        accent="rgba(247,155,30,0.4)"
+        colorClass={ORANGE}
+        shadowClass={ORANGE_SHADOW}
       />
-      <Card
+      <MetricCard
         icon={Thermometer}
         label="Warnings"
         value={String(warning)}
-        gradient={warning > 0
-          ? 'linear-gradient(135deg, #EAB308, #CA8A04)'
-          : 'linear-gradient(135deg, #F79B1E, #E68A0D)'}
-        accent="rgba(234,179,8,0.4)"
+        colorClass={warning > 0 ? 'bg-gradient-to-br from-amber-400 to-amber-500' : ORANGE}
+        shadowClass={warning > 0 ? 'shadow-amber-500/20' : ORANGE_SHADOW}
       />
-      <Card
+      <MetricCard
         icon={AlertTriangle}
         label="Temp Alarms"
         value={String(alarm)}
-        gradient={alarm > 0
-          ? 'linear-gradient(135deg, #EF4444, #B91C1C)'
-          : 'linear-gradient(135deg, #F79B1E, #E68A0D)'}
-        accent="rgba(239,68,68,0.45)"
+        colorClass={alarm > 0 ? 'bg-gradient-to-br from-red-500 to-red-600' : ORANGE}
+        shadowClass={alarm > 0 ? 'shadow-red-500/20' : ORANGE_SHADOW}
       />
     </div>
   );
