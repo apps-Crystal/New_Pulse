@@ -2,9 +2,11 @@
 import { useEffect, useState } from 'react';
 
 /**
- * FULL-SCREEN alert takeover - covers 100% of the viewport.
- * No close button, no clickable elements. Disappears only when every alarm clears.
- * Below `md` the alarm grid collapses to a single column and the takeover scrolls vertically.
+ * FULL-SCREEN alert takeover - covers 100% of the viewport while an alarm is ringing.
+ * One control: "Silence siren". It acknowledges every alarm on screen: the siren stops, the takeover
+ * shrinks to a banner at the top, the rooms stay red. The takeover and the siren come back by themselves
+ * when a new room goes into alarm or a silenced room clears and alarms again. Everything clears when the
+ * last alarm clears. Below `md` the alarm grid collapses to a single column and the takeover scrolls.
  */
 function AlertTimer({ startTime, className = '' }) {
   const [elapsed, setElapsed] = useState(Math.floor((Date.now() - startTime) / 1000));
@@ -107,8 +109,37 @@ function getLayoutConfig(count) {
   };
 }
 
-export default function AlarmModal({ alarms }) {
+export default function AlarmModal({ alarms, silenced = [], onSilence, onRingAgain }) {
   if (!alarms || alarms.length === 0) return null;
+
+  const ringing = alarms.filter((a) => !silenced.includes(a.id));
+
+  // Every active alarm acknowledged: a banner instead of the takeover, so the screen is usable again.
+  if (ringing.length === 0) {
+    return (
+      <div className="pointer-events-none fixed inset-x-0 top-3 z-[9999] flex justify-center px-3">
+        <div
+          role="status"
+          className="pointer-events-auto flex max-w-[96vw] flex-wrap items-center justify-center gap-x-3 gap-y-2 rounded-full border px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-[#fca5a5]"
+          style={{ background: 'rgba(69,10,10,0.96)', borderColor: 'rgba(239,68,68,0.6)', boxShadow: '0 8px 30px rgba(0,0,0,0.5)' }}
+        >
+          <span className="h-2 w-2 rounded-full" style={{ background: '#ef4444', boxShadow: '0 0 8px rgba(239,68,68,0.9)' }} />
+          <span>Siren silenced · {alarms.length === 1 ? '1 alarm' : `${alarms.length} alarms`} still active:</span>
+          <span className="tabular font-mono normal-case tracking-normal text-white">
+            {alarms.map((a) => `${a.label} ${a.temperature == null ? '—' : a.temperature.toFixed(1)} °C`).join(' · ')}
+          </span>
+          <button
+            type="button"
+            onClick={onRingAgain}
+            className="rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white transition-colors hover:bg-red-500/30"
+            style={{ background: 'rgba(239,68,68,0.2)', borderColor: 'rgba(239,68,68,0.6)' }}
+          >
+            Ring again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const layout = getLayoutConfig(alarms.length);
 
@@ -199,14 +230,24 @@ export default function AlarmModal({ alarms }) {
           })}
         </div>
 
-        {/* Bottom message */}
-        <div
-          className="flex items-center justify-center rounded-full border px-5 py-2 text-center md:px-8"
-          style={{ background: 'rgba(0,0,0,0.3)', borderColor: 'rgba(255,255,255,0.1)' }}
-        >
-          <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-300">
-            This screen will clear automatically when all temperatures return to range
-          </span>
+        {/* Bottom: silence control + message */}
+        <div className="flex flex-col items-center gap-3">
+          <button
+            type="button"
+            onClick={onSilence}
+            className="pointer-events-auto inline-flex items-center gap-2 rounded-full border px-6 py-3 text-[13px] font-bold uppercase tracking-[0.2em] text-white transition-colors hover:bg-white/10 md:px-8"
+            style={{ background: 'rgba(11,15,30,0.85)', borderColor: 'rgba(255,255,255,0.35)', boxShadow: '0 8px 30px rgba(0,0,0,0.45)' }}
+          >
+            Silence siren
+          </button>
+          <div
+            className="flex items-center justify-center rounded-full border px-5 py-2 text-center md:px-8"
+            style={{ background: 'rgba(0,0,0,0.3)', borderColor: 'rgba(255,255,255,0.1)' }}
+          >
+            <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-300">
+              Silence keeps the alarm on screen and stops the sound · rings again for any new alarm · clears when temperatures return to range
+            </span>
+          </div>
         </div>
       </div>
     </div>

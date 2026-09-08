@@ -48,6 +48,11 @@ export default function Dashboard() {
   // The choice is remembered per browser, so a wall display keeps it across reloads and deploys.
   const [alarmsEnabled, setAlarmsEnabled] = useState(false);
   const [testSiren, setTestSiren] = useState(false);      // "Test sound": run the siren for a few seconds
+  // Silenced alarms: zone ids whose current alarm episode has been acknowledged on this screen. The room
+  // stays red and listed, the siren and the full-screen takeover stop. An entry is dropped the moment the
+  // room leaves alarm, so a room that clears and alarms again rings again; a new room in alarm always rings.
+  const [silenced, setSilenced] = useState([]);
+  const silencedRef = useRef(new Set());
   const testTimerRef = useRef(null);
   const testSound = useCallback(() => {
     clearTimeout(testTimerRef.current);
@@ -152,6 +157,10 @@ export default function Dashboard() {
 
     setAlarms(nextAlarms);
     setWarnings(nextWarnings);
+    const stillActive = new Set(nextAlarms.map((a) => a.id));
+    let pruned = false;
+    for (const id of silencedRef.current) if (!stillActive.has(id)) { silencedRef.current.delete(id); pruned = true; }
+    if (pruned) setSilenced([...silencedRef.current]);
     if (newEvents.length) {
       setEvents((prev) => [...newEvents.reverse(), ...prev].slice(0, MAX_EVENTS));
     }
@@ -262,8 +271,18 @@ export default function Dashboard() {
     if (last) applySnapshot(last.data, last.from);
   }, [alarmsEnabled, applySnapshot]);
 
+  const silenceAlarms = useCallback(() => {
+    for (const a of alarms) silencedRef.current.add(a.id);
+    setSilenced([...silencedRef.current]);
+  }, [alarms]);
+  const ringAgain = useCallback(() => {
+    silencedRef.current.clear();
+    setSilenced([]);
+  }, []);
+
   const total = rooms.length || 16;
   const alarmCount = alarms.length;
+  const ringing = alarms.filter((a) => !silenced.includes(a.id));
   const warnCount = warnings.length;
   const offlineCount = rooms.filter((r) => zoneStatus(r) === 'offline').length;
   const normalCount = rooms.filter((r) => (alarmsEnabled ? zoneStatus(r) === 'ok' : zoneStatus(r) !== 'offline')).length;
@@ -283,7 +302,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen font-sans lg:flex lg:h-screen lg:flex-col lg:overflow-hidden">
-      <Header connected={connected} source={source} alarmsEnabled={alarmsEnabled} onEnableAlarms={() => setAlarmsEnabled(true)} onDisableAlarms={() => { setTestSiren(false); setAlarmsEnabled(false); }} onTestSound={testSound} testing={testSiren} />
+      <Header connected={connected} source={source} alarmsEnabled={alarmsEnabled} onEnableAlarms={() => setAlarmsEnabled(true)} onDisableAlarms={() => { setTestSiren(false); silencedRef.current.clear(); setSilenced([]); setAlarmsEnabled(false); }} onTestSound={testSound} testing={testSiren} />
 
       <main className="scrollbar-thin mx-auto w-full max-w-7xl space-y-6 px-4 pb-6 pt-2 sm:px-6 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:gap-4 lg:space-y-0 lg:overflow-y-auto lg:pb-8 lg:pt-1">
         {/* First screen: metrics + 4x4 grid. At lg+ this section is exactly the height of <main>, so all 16 zones fit without scrolling. */}
@@ -308,8 +327,8 @@ export default function Dashboard() {
       </main>
 
       {alarmsEnabled && <WarningToasts warnings={warnings} />}
-      {alarmsEnabled && <AlarmModal alarms={alarms} />}
-      <AlarmSiren enabled={alarmsEnabled} active={alarmsEnabled && (alarmCount > 0 || testSiren)} />
+      {alarmsEnabled && <AlarmModal alarms={alarms} silenced={silenced} onSilence={silenceAlarms} onRingAgain={ringAgain} />}
+      <AlarmSiren enabled={alarmsEnabled} active={alarmsEnabled && (ringing.length > 0 || testSiren)} />
     </div>
   );
 }
