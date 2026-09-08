@@ -71,3 +71,27 @@ test('database path: equal limits mean "not configured", low above high is flagg
   assert.equal(r.chiller_room_5.setLow, 0);
   assert.equal(r.chiller_room_5.alarm, false);
 });
+
+// The live path builds rooms before a screen's limit rows have arrived, then fills them from the database
+// seed through applySetpoints. Filled limits must obey the band rules too, or an impossible band from the
+// panel raises a red alarm on the live path while the database path shows LIMITS INVALID.
+test('applySetpoints: limits it fills in follow the band rules before the alarm is recomputed', () => {
+  const r = rowsToSnapshot(long, [
+    { room: 'Chiller Room 5', temperature: -20.5, ts_ms: NOW },
+    { room: 'Dock Area', temperature: 0, ts_ms: NOW },
+    { room: 'Frozen Room 3', temperature: 25, ts_ms: NOW },
+  ], { now: NOW, staleMs: 600000 });
+  applySetpoints(r, {
+    chiller_room_5: { setLow: 0, setHigh: -15 },
+    dock_area: { setLow: 0, setHigh: 0 },
+    frozen_room_3: { setLow: -15, setHigh: 30 },
+  });
+  assert.equal(r.chiller_room_5.limitsInvalid, true);
+  assert.equal(r.chiller_room_5.alarm, false);
+  assert.equal(r.chiller_room_5.setLow, 0);
+  assert.equal(r.dock_area.setLow, null);
+  assert.equal(r.dock_area.setHigh, null);
+  assert.equal(r.dock_area.alarm, false);
+  assert.equal(r.frozen_room_3.setLow, -15);
+  assert.equal(r.frozen_room_3.alarm, false);
+});
