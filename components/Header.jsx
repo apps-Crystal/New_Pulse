@@ -27,8 +27,9 @@ function feedPill(connected, source) {
   return { style: GREEN, dot: GREEN_DOT, text: 'Live · DB', title: 'Polling the database (live feed not connected)' };
 }
 
-export default function Header({ connected, source, alarmsMuted, onToggleAlarms }) {
+export default function Header({ connected, source, alarmsEnabled, onEnableAlarms, onDisableAlarms }) {
   const [clock, setClock] = useState('--:--:--');
+  const [confirming, setConfirming] = useState(false); // "Start alarms?" question open
 
   useEffect(() => {
     setClock(fmtClock());
@@ -59,23 +60,65 @@ export default function Header({ connected, source, alarmsMuted, onToggleAlarms 
             {pill.text}
           </div>
 
-          <button
-            type="button"
-            onClick={onToggleAlarms}
-            aria-label="Toggle alarms"
-            aria-pressed={!alarmsMuted}
-            title={alarmsMuted ? 'Alarms muted - click to enable' : 'Alarms on - click to mute'}
-            className={`${PILL} transition-colors ${
-              alarmsMuted ? 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10' : 'hover:bg-red-500/25'
-            }`}
-            style={
-              alarmsMuted
-                ? undefined
-                : { color: '#f87171', background: 'rgba(239,68,68,0.15)', borderColor: 'rgba(239,68,68,0.45)' }
-            }
-          >
-            {alarmsMuted ? 'Alarms muted' : 'Alarms armed'}
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => (alarmsEnabled ? onDisableAlarms() : setConfirming((c) => !c))}
+              aria-label={alarmsEnabled ? 'Alarms on' : 'Alarms off'}
+              aria-pressed={alarmsEnabled}
+              aria-expanded={!alarmsEnabled ? confirming : undefined}
+              title={alarmsEnabled ? 'Alarms on - click to switch them off' : 'Alarms off - click to start them'}
+              className={`${PILL} transition-colors ${
+                alarmsEnabled ? 'hover:bg-red-500/25' : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
+              }`}
+              style={
+                alarmsEnabled
+                  ? { color: '#f87171', background: 'rgba(239,68,68,0.15)', borderColor: 'rgba(239,68,68,0.45)' }
+                  : undefined
+              }
+            >
+              <span
+                className="h-2 w-2 rounded-full"
+                style={alarmsEnabled ? { background: '#f87171', boxShadow: '0 0 8px rgba(248,113,113,0.9)' } : { background: '#64748b' }}
+              />
+              {alarmsEnabled ? 'Alarms on' : 'Alarms off'}
+            </button>
+
+            {confirming && !alarmsEnabled && (
+              <>
+                <button type="button" aria-label="Not now" className="fixed inset-0 z-[9990] cursor-default" onClick={() => setConfirming(false)} />
+                <div
+                  role="dialog"
+                  aria-label="Start alarms?"
+                  className="absolute right-0 top-[calc(100%+8px)] z-[9991] w-72 rounded-xl border p-4 text-left shadow-2xl"
+                  style={{ background: 'rgba(17,23,48,0.98)', borderColor: 'rgba(239,68,68,0.45)' }}
+                >
+                  <div className="text-[15px] font-semibold leading-tight text-white">Start alarms on this screen?</div>
+                  <div className="mt-2 text-[12px] leading-snug text-slate-300">
+                    Rooms outside their panel limits will turn red, near-limit rooms yellow, and the siren will sound here.
+                    Limits stay visible either way. Remembered for this browser.
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setConfirming(false); onEnableAlarms(); }}
+                      className={`${PILL} flex-1 justify-center hover:bg-red-500/30`}
+                      style={{ color: '#fecaca', background: 'rgba(239,68,68,0.25)', borderColor: 'rgba(239,68,68,0.6)' }}
+                    >
+                      Yes, start alarms
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirming(false)}
+                      className={`${PILL} flex-1 justify-center border-white/10 bg-white/5 text-slate-300 hover:bg-white/10`}
+                    >
+                      Not now
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
 
           <div className="tabular font-mono text-lg font-medium leading-none text-white sm:text-[26px]" suppressHydrationWarning>
             {clock}

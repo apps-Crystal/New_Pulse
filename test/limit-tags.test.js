@@ -44,3 +44,30 @@ test('database path: a limit row for an unknown room is still an unknown room, n
   assert.equal(Object.keys(r).length, 17);
   assert.equal(missingZones([{ room: 'Frozen Room 1 Set High' }]).includes('frozen_room_1'), false);
 });
+
+// What the panel actually holds today: Dock Area has 0 / 0 (nobody configured it) and Chiller Room 5 has
+// SET LOW 0 above SET HIGH -15 (a slip on the panel). Neither may become a false alarm.
+test('database path: equal limits mean "not configured", low above high is flagged and never alarms', () => {
+  const r = rowsToSnapshot(long, [
+    { room: 'Dock Area', temperature: 0, ts_ms: NOW },
+    { room: 'Dock Area Set Low', temperature: 0, ts_ms: NOW },
+    { room: 'Dock Area Set High', temperature: 0, ts_ms: NOW },
+    { room: 'Chiller Room 5', temperature: -19.1, ts_ms: NOW },
+    { room: 'Chiller Room 5 Set Low', temperature: 0, ts_ms: NOW },
+    { room: 'Chiller Room 5 Set High', temperature: -15, ts_ms: NOW },
+  ], { now: NOW, staleMs: 600000 });
+  assert.equal(r.dock_area.setLow, null);
+  assert.equal(r.dock_area.setHigh, null);
+  assert.equal(r.dock_area.limitsInvalid, false);
+  assert.equal(r.dock_area.alarm, false);
+  assert.equal(r.chiller_room_5.setLow, 0);       // shown as the panel has it
+  assert.equal(r.chiller_room_5.setHigh, -15);
+  assert.equal(r.chiller_room_5.limitsInvalid, true);
+  assert.equal(r.chiller_room_5.alarm, false);
+  // The operator file may still fill an unconfigured room; it never un-flags an inverted one.
+  applySetpoints(r, { dock_area: { setLow: -5, setHigh: 25 }, chiller_room_5: { setLow: -25, setHigh: -15 } });
+  assert.equal(r.dock_area.setLow, -5);
+  assert.equal(r.dock_area.alarm, false);
+  assert.equal(r.chiller_room_5.setLow, 0);
+  assert.equal(r.chiller_room_5.alarm, false);
+});

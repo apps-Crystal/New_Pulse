@@ -9,7 +9,8 @@ function MetricCard({ label, value, labelClass, valueClass, style }) {
   );
 }
 
-export default function MetricCards({ total, normal, alarm, warning }) {
+export default function MetricCards({ total, normal, alarm, warning, alarmsEnabled = true }) {
+  const off = !alarmsEnabled;
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <MetricCard
@@ -24,13 +25,18 @@ export default function MetricCards({ total, normal, alarm, warning }) {
         }}
       />
       <MetricCard label="Normal" value={String(normal)} labelClass="text-slate-300" valueClass="text-[#34d399]" />
-      <MetricCard label="Warnings" value={String(warning)} labelClass="text-slate-300" valueClass="text-[#facc15]" />
+      <MetricCard
+        label="Warnings"
+        value={off ? 'Off' : String(warning)}
+        labelClass="text-slate-300"
+        valueClass={off ? 'text-slate-500 text-[22px]' : 'text-[#facc15]'}
+      />
       <MetricCard
         label="Temp Alarms"
-        value={String(alarm)}
-        labelClass="text-[#f87171]"
-        valueClass="text-[#f87171]"
-        style={alarm > 0 ? { borderColor: 'rgba(239,68,68,0.5)', background: 'rgba(239,68,68,0.07)' } : undefined}
+        value={off ? 'Off' : String(alarm)}
+        labelClass={off ? 'text-slate-300' : 'text-[#f87171]'}
+        valueClass={off ? 'text-slate-500 text-[22px]' : 'text-[#f87171]'}
+        style={!off && alarm > 0 ? { borderColor: 'rgba(239,68,68,0.5)', background: 'rgba(239,68,68,0.07)' } : undefined}
       />
     </div>
   );

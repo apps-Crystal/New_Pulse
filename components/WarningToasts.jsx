@@ -24,7 +24,7 @@ export default function WarningToasts({ warnings }) {
               <div className="truncate text-[15px] font-medium leading-tight text-white">{w.label}</div>
               <div className="mt-1 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-[#facc15]">
                 <span className="h-2 w-2 rounded-full" style={{ background: '#eab308', boxShadow: '0 0 8px rgba(234,179,8,0.6)' }} />
-                {nearHigh ? 'Near high' : 'Near low'}
+                {w.limitsInvalid ? 'Limits invalid on panel' : nearHigh ? 'Near high' : 'Near low'}
               </div>
             </div>
             <div className="flex shrink-0 items-baseline gap-1">

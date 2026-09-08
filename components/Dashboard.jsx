@@ -43,7 +43,12 @@ export default function Dashboard() {
   const [alarms, setAlarms] = useState([]);
   const [warnings, setWarnings] = useState([]);
   const [events, setEvents] = useState([]);
-  const [alarmsMuted, setAlarmsMuted] = useState(true); // start muted: show temperatures only
+  // Alarms are off until someone on this screen says yes. Off means: limits still shown under every
+  // temperature, but no red or yellow states, no counts, no toast, no modal, no siren, no event log.
+  // The choice is remembered per browser, so a wall display keeps it across reloads and deploys.
+  const [alarmsEnabled, setAlarmsEnabled] = useState(false);
+  const alarmsEnabledRef = useRef(false);
+  const lastSnapshotRef = useRef(null);         // { data, from } - re-evaluated when the switch flips
 
   const sinceRef = useRef(new Map());            // zoneId -> alarm start ts
   const prevStatusRef = useRef(new Map());       // zoneId -> last status
@@ -61,8 +66,10 @@ export default function Dashboard() {
 
   // One place turns a snapshot (from either source) into cards, alarms and events.
   const applySnapshot = useCallback((data, from) => {
+    lastSnapshotRef.current = { data, from };
     setConnected(Boolean(data.connected));
     setSource(from);
+    const armed = alarmsEnabledRef.current;
 
     const roomMap = data.rooms || {};
     const list = Object.entries(roomMap).map(([id, r]) => ({ id, ...r }));
@@ -83,7 +90,9 @@ export default function Dashboard() {
     const newEvents = [];
 
     for (const room of list) {
-      const status = zoneStatus(room);
+      // With alarms off a room is only ever ok or offline, so the moment they are switched on every room
+      // already outside its limits raises a fresh alarm and a fresh event.
+      const status = armed ? zoneStatus(room) : zoneStatus(room) === 'offline' ? 'offline' : 'ok';
       const prev = prevStatusRef.current.get(room.id) || 'ok';
 
       if (status === 'alarm') {
@@ -107,6 +116,7 @@ export default function Dashboard() {
           temperature: room.temperature,
           setLow: room.setLow,
           setHigh: room.setHigh,
+          limitsInvalid: Boolean(room.limitsInvalid),
         });
       }
 
@@ -232,11 +242,24 @@ export default function Dashboard() {
     return () => clearInterval(id);
   }, [poll]);
 
+  // Remembered per browser; read after mount so the server render and the first client render agree.
+  useEffect(() => {
+    let stored = false;
+    try { stored = window.localStorage.getItem('pulse.alarmsEnabled') === 'true'; } catch { stored = false; }
+    if (stored) setAlarmsEnabled(true);
+  }, []);
+  useEffect(() => {
+    alarmsEnabledRef.current = alarmsEnabled;
+    try { window.localStorage.setItem('pulse.alarmsEnabled', alarmsEnabled ? 'true' : 'false'); } catch { /* private mode: not remembered */ }
+    const last = lastSnapshotRef.current;
+    if (last) applySnapshot(last.data, last.from);
+  }, [alarmsEnabled, applySnapshot]);
+
   const total = rooms.length || 16;
   const alarmCount = alarms.length;
   const warnCount = warnings.length;
   const offlineCount = rooms.filter((r) => zoneStatus(r) === 'offline').length;
-  const normalCount = rooms.filter((r) => zoneStatus(r) === 'ok').length;
+  const normalCount = rooms.filter((r) => (alarmsEnabled ? zoneStatus(r) === 'ok' : zoneStatus(r) !== 'offline')).length;
 
   let footer;
   if (source === null) {
@@ -253,12 +276,12 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen font-sans lg:flex lg:h-screen lg:flex-col lg:overflow-hidden">
-      <Header connected={connected} source={source} alarmsMuted={alarmsMuted} onToggleAlarms={() => setAlarmsMuted((m) => !m)} />
+      <Header connected={connected} source={source} alarmsEnabled={alarmsEnabled} onEnableAlarms={() => setAlarmsEnabled(true)} onDisableAlarms={() => setAlarmsEnabled(false)} />
 
       <main className="scrollbar-thin mx-auto w-full max-w-7xl space-y-6 px-4 pb-6 pt-2 sm:px-6 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:gap-4 lg:space-y-0 lg:overflow-y-auto lg:pb-8 lg:pt-1">
         {/* First screen: metrics + 4x4 grid. At lg+ this section is exactly the height of <main>, so all 16 zones fit without scrolling. */}
         <div className="space-y-6 lg:flex lg:h-full lg:min-h-0 lg:shrink-0 lg:flex-col lg:gap-4 lg:space-y-0 lg:pb-3">
-          <MetricCards total={total} normal={normalCount} alarm={alarmCount} warning={warnCount} />
+          <MetricCards total={total} normal={normalCount} alarm={alarmCount} warning={warnCount} alarmsEnabled={alarmsEnabled} />
 
           {/* Room grid */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:min-h-0 lg:flex-1 lg:grid-cols-4 lg:grid-rows-4">
@@ -266,7 +289,7 @@ export default function Dashboard() {
               ? Array.from({ length: 16 }).map((_, i) => (
                   <div key={i} className="card h-32 animate-pulse lg:h-full" />
                 ))
-              : rooms.map((room) => <RoomCard key={room.id} room={room} />)}
+              : rooms.map((room) => <RoomCard key={room.id} room={room} alarmsEnabled={alarmsEnabled} />)}
           </div>
         </div>
 
@@ -277,9 +300,9 @@ export default function Dashboard() {
         <div className="pb-6 text-center text-[11px] text-slate-500 lg:shrink-0">{footer}</div>
       </main>
 
-      {!alarmsMuted && <WarningToasts warnings={warnings} />}
-      {!alarmsMuted && <AlarmModal alarms={alarms} />}
-      <AlarmSiren active={!alarmsMuted && alarmCount > 0} />
+      {alarmsEnabled && <WarningToasts warnings={warnings} />}
+      {alarmsEnabled && <AlarmModal alarms={alarms} />}
+      <AlarmSiren enabled={alarmsEnabled} active={alarmsEnabled && alarmCount > 0} />
     </div>
   );
 }

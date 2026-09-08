@@ -80,3 +80,25 @@ test('live-snapshot: a seed from the database fills rooms the first broadcast do
   assert.equal(rooms.chiller_room_3.updatedAt, NOW - 20000); // ...with the database's timestamp
   assert.equal(rooms.chiller_room_3.offline, false);
 });
+
+test('live-snapshot: limit tags follow the same band rules as the database path', () => {
+  const state = snap.createLiveState();
+  snap.ingest(state, [
+    { tag: 'Chiller Room 5', value: -19.1, ts: NOW },
+    { tag: 'Chiller Room 5 Set Low', value: 0, ts: NOW },
+    { tag: 'Chiller Room 5 Set High', value: -15, ts: NOW },
+    { tag: 'Dock Area', value: 0, ts: NOW },
+    { tag: 'Dock Area Set Low', value: 0, ts: NOW },
+    { tag: 'Dock Area Set High', value: 0, ts: NOW },
+    { tag: 'Frozen Room 1', value: -19.1, ts: NOW },
+    { tag: 'Frozen Room 1 Set Low', value: -20, ts: NOW },
+    { tag: 'Frozen Room 1 Set High', value: 0, ts: NOW },
+  ], NOW);
+  const { rooms } = snap.buildRooms(state, { now: NOW, staleMs: 600000 });
+  assert.equal(rooms.chiller_room_5.limitsInvalid, true);
+  assert.equal(rooms.chiller_room_5.alarm, false);
+  assert.equal(rooms.dock_area.setLow, null);
+  assert.equal(rooms.dock_area.limitsInvalid, false);
+  assert.equal(rooms.frozen_room_1.setLow, -20);
+  assert.equal(rooms.frozen_room_1.alarm, false);
+});

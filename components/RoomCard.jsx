@@ -18,8 +18,9 @@ const TINT = {
   offline: { background: 'rgba(0,0,0,0.18)' },
 };
 
-export default function RoomCard({ room }) {
-  const status = zoneStatus(room);
+export default function RoomCard({ room, alarmsEnabled = true }) {
+  // Alarms off: the card keeps its limits line but never colours; only "no signal" still shows.
+  const status = alarmsEnabled ? zoneStatus(room) : zoneStatus(room) === 'offline' ? 'offline' : 'ok';
   const t = room.temperature;
   const outHigh = room.setHigh != null && t != null && t > room.setHigh;
   const nearHigh = room.setHigh != null && t != null && t >= room.setHigh - WARN_MARGIN;
@@ -30,7 +31,7 @@ export default function RoomCard({ room }) {
     label = outHigh ? 'TEMP TOO HIGH' : 'TEMP TOO LOW';
     labelClass = 'text-[#f87171]';
   } else if (status === 'warning') {
-    label = nearHigh ? 'NEAR HIGH' : 'NEAR LOW';
+    label = room.limitsInvalid ? 'LIMITS INVALID' : nearHigh ? 'NEAR HIGH' : 'NEAR LOW';
     labelClass = 'text-[#facc15]';
   } else if (status === 'offline') {
     label = 'NO SIGNAL';

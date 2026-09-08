@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Volume2, VolumeX } from 'lucide-react';
 
 // Two-tone Web Audio siren, armed on first user interaction. No audio file needed.
-export default function AlarmSiren({ active }) {
+export default function AlarmSiren({ active, enabled = true }) {
   const [armed, setArmed] = useState(false);
   const ctxRef = useRef(null);
   const oscRef = useRef(null);
@@ -71,6 +71,9 @@ export default function AlarmSiren({ active }) {
     else stop();
     return () => {};
   }, [active, armed]);
+
+  // Alarms switched off on this screen: nothing to arm, nothing to say.
+  if (!enabled) return null;
 
   // Big prompt if an alarm is firing but audio isn't armed yet.
   if (active && !armed) {
