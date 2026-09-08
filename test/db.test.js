@@ -68,6 +68,7 @@ function fakePool(spec) {
       if (/pg_class/.test(text)) return { rows: spec.matviews || [] };
       if (/FOREIGN KEY/.test(text)) return { rows: spec.fks || [] };
       if (/information_schema\.columns WHERE/.test(text)) return { rows: spec.refColumns || [] };
+      if (/\/\* limits \*\//.test(text)) return typeof spec.limits === 'function' ? spec.limits(q) : { rows: spec.limits || [] };
       return spec.onQuery(text);
     },
     async end() {},
@@ -110,7 +111,7 @@ test('db module: tiered window - recent slice first, 48h window only when a zone
     }),
   });
   db._setPoolForTests(pool);
-  const main = () => pool.calls.filter((c) => /DISTINCT ON/.test(c.text));
+  const main = () => pool.calls.filter((c) => /DISTINCT ON/.test(c.text) && !/\/\* limits \*\//.test(c.text));
 
   // (a) table empty in the last 48h: recent -> window -> unbounded (3 queries), 3-day-old reading shown as stale
   const snap1 = await db.getSnapshot();
@@ -189,7 +190,7 @@ test('db module: PULSE_STALE_MS below 7.5 min keeps a 15 min recent window; PULS
   db._setPoolForTests(pool);
   const snap = await db.getSnapshot();
   assert.equal(snap.ok, true, snap.error);
-  const main = pool.calls.filter((c) => /DISTINCT ON/.test(c.text));
+  const main = pool.calls.filter((c) => /DISTINCT ON/.test(c.text) && !/\/\* limits \*\//.test(c.text));
   assert.equal(main.length, 1);
   assert.ok(!/interval/.test(main[0].text));
   assert.deepEqual(db.getStatus().lastTiers, ['unbounded']);
@@ -345,4 +346,45 @@ test('db module: PULSE_SETPOINTS fills null DB limits and recomputes alarm; DB s
   } finally {
     delete process.env.PULSE_SETPOINTS;
   }
+}));
+
+// The collector writes a "<room> Set Low/High" row only when a limit changes, so the limits fall out of the
+// tiered windows within minutes while still being the current limits. They are read as configuration:
+// newest row per limit tag, any age, one index-friendly query, cached for a minute.
+test('db module: panel limits are read without a time window, folded into the rooms, and cached a minute', withEnv(async (db) => {
+  const pool = fakePool({
+    discovery: disc('temperature_readings', [['id', 'bigint'], ['room', 'text'], ['temperature', 'numeric'], ['recorded_at', 'timestamp with time zone']]),
+    onQuery: (text) => ({ rows: /interval '20 minutes'/.test(text) ? ZONES.map((z) => row(z.label, -1)) : [] }),
+    limits: (q) => {
+      assert.equal(q.values.length, 1);
+      assert.equal(q.values[0].length, 32);
+      assert.ok(q.values[0].includes('Frozen Room 1 Set Low'));
+      assert.ok(q.values[0].includes('Dock Area Set High'));
+      return { rows: [
+        row('Frozen Room 1 Set Low', -25, 5 * 86400000), row('Frozen Room 1 Set High', -14, 5 * 86400000),
+        row('Chiller Room 5 Set Low', 0, 3600000), row('Chiller Room 5 Set High', -15, 3600000),
+      ] };
+    },
+  });
+  db._setPoolForTests(pool);
+  const limitCalls = () => pool.calls.filter((c) => /\/\* limits \*\//.test(c.text));
+  const snap = await db.getSnapshot();
+  assert.equal(snap.ok, true, snap.error);
+  assert.equal(limitCalls().length, 1);
+  assert.match(limitCalls()[0].text, /DISTINCT ON \("room"\)/);
+  assert.match(limitCalls()[0].text, /"room" = ANY\(\$1::text\[\]\)/);
+  assert.ok(!/interval/.test(limitCalls()[0].text), 'no time window on the limits');
+  assert.equal(snap.rooms.frozen_room_1.setLow, -25);      // five days old and still the current limit
+  assert.equal(snap.rooms.frozen_room_1.setHigh, -14);
+  assert.equal(snap.rooms.frozen_room_1.temperature, -1);   // a limit row never becomes the temperature
+  assert.equal(snap.rooms.frozen_room_1.offline, false);
+  assert.equal(snap.rooms.chiller_room_5.limitsInvalid, true);
+  assert.equal(snap.rooms.chiller_room_5.alarm, false);
+  assert.equal(snap.rooms.frozen_room_3.setLow, null);      // no limit rows for it: no limits
+  assert.equal(db.getStatus().queryCount, 1, 'the limits query is not a snapshot query');
+  // Cached: the next poll re-reads temperatures but not the limits.
+  pool.calls.length = 0;
+  await db.getSnapshot();
+  assert.equal(limitCalls().length, 0);
+  assert.equal(pool.calls.filter((c) => /DISTINCT ON/.test(c.text)).length, 1);
 }));
