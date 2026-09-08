@@ -96,3 +96,14 @@ test('applySetpoints: limits it fills in follow the band rules before the alarm 
   assert.equal(r.frozen_room_3.setLow, -15);
   assert.equal(r.frozen_room_3.alarm, false);
 });
+
+// Limits are read from the panel twice a day, so a browser opened between reads gets its bands from the
+// last database snapshot, where a reversed pair has already been corrected. The mark must travel with it.
+test('applySetpoints: a seeded band keeps its "swapped" mark', () => {
+  const r = rowsToSnapshot(long, [{ room: 'Frozen Room 1', temperature: -18.8, ts_ms: NOW }], { now: NOW, staleMs: 600000 });
+  applySetpoints(r, { frozen_room_1: { setLow: -25, setHigh: -14, limitsSwapped: true }, frozen_room_2: { setLow: -25, setHigh: -14 } });
+  assert.equal(r.frozen_room_1.setLow, -25);
+  assert.equal(r.frozen_room_1.limitsSwapped, true);
+  assert.equal(r.frozen_room_1.alarm, false);
+  assert.equal(r.frozen_room_2.limitsSwapped, false);
+});

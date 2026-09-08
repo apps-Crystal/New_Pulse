@@ -84,7 +84,7 @@ export default function Dashboard() {
     if (from === 'db' && data.connected) {
       // Remember database-provided limits per room (merge, never wipe) so live snapshots keep them.
       const merged = { ...dbLimitsRef.current };
-      for (const r of list) if (r.setLow != null || r.setHigh != null) merged[r.id] = { setLow: r.setLow, setHigh: r.setHigh };
+      for (const r of list) if (r.setLow != null || r.setHigh != null) merged[r.id] = { setLow: r.setLow, setHigh: r.setHigh, limitsSwapped: Boolean(r.limitsSwapped) };
       dbLimitsRef.current = merged;
       dbSeedRef.current = list
         .filter((r) => r.temperature != null && r.updatedAt != null)
