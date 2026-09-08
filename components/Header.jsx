@@ -27,7 +27,7 @@ function feedPill(connected, source) {
   return { style: GREEN, dot: GREEN_DOT, text: 'Live · DB', title: 'Polling the database (live feed not connected)' };
 }
 
-export default function Header({ connected, source, alarmsEnabled, onEnableAlarms, onDisableAlarms }) {
+export default function Header({ connected, source, alarmsEnabled, onEnableAlarms, onDisableAlarms, onTestSound, testing }) {
   const [clock, setClock] = useState('--:--:--');
   const [confirming, setConfirming] = useState(false); // "Start alarms?" question open
 
@@ -119,6 +119,19 @@ export default function Header({ connected, source, alarmsEnabled, onEnableAlarm
               </>
             )}
           </div>
+
+          {alarmsEnabled && (
+            <button
+              type="button"
+              onClick={onTestSound}
+              aria-label="Test alarm sound"
+              title="Play the siren for four seconds to check this screen's sound"
+              className={`${PILL} border-white/10 bg-white/5 text-slate-300 transition-colors hover:bg-white/10`}
+              style={testing ? { color: '#fecaca', background: 'rgba(239,68,68,0.2)', borderColor: 'rgba(239,68,68,0.5)' } : undefined}
+            >
+              {testing ? 'Sounding…' : 'Test sound'}
+            </button>
+          )}
 
           <div className="tabular font-mono text-lg font-medium leading-none text-white sm:text-[26px]" suppressHydrationWarning>
             {clock}

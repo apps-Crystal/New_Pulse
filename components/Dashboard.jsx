@@ -47,6 +47,13 @@ export default function Dashboard() {
   // temperature, but no red or yellow states, no counts, no toast, no modal, no siren, no event log.
   // The choice is remembered per browser, so a wall display keeps it across reloads and deploys.
   const [alarmsEnabled, setAlarmsEnabled] = useState(false);
+  const [testSiren, setTestSiren] = useState(false);      // "Test sound": run the siren for a few seconds
+  const testTimerRef = useRef(null);
+  const testSound = useCallback(() => {
+    clearTimeout(testTimerRef.current);
+    setTestSiren(true);
+    testTimerRef.current = setTimeout(() => setTestSiren(false), 4000);
+  }, []);
   const alarmsEnabledRef = useRef(false);
   const lastSnapshotRef = useRef(null);         // { data, from } - re-evaluated when the switch flips
 
@@ -276,7 +283,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen font-sans lg:flex lg:h-screen lg:flex-col lg:overflow-hidden">
-      <Header connected={connected} source={source} alarmsEnabled={alarmsEnabled} onEnableAlarms={() => setAlarmsEnabled(true)} onDisableAlarms={() => setAlarmsEnabled(false)} />
+      <Header connected={connected} source={source} alarmsEnabled={alarmsEnabled} onEnableAlarms={() => setAlarmsEnabled(true)} onDisableAlarms={() => { setTestSiren(false); setAlarmsEnabled(false); }} onTestSound={testSound} testing={testSiren} />
 
       <main className="scrollbar-thin mx-auto w-full max-w-7xl space-y-6 px-4 pb-6 pt-2 sm:px-6 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:gap-4 lg:space-y-0 lg:overflow-y-auto lg:pb-8 lg:pt-1">
         {/* First screen: metrics + 4x4 grid. At lg+ this section is exactly the height of <main>, so all 16 zones fit without scrolling. */}
@@ -302,7 +309,7 @@ export default function Dashboard() {
 
       {alarmsEnabled && <WarningToasts warnings={warnings} />}
       {alarmsEnabled && <AlarmModal alarms={alarms} />}
-      <AlarmSiren enabled={alarmsEnabled} active={alarmsEnabled && alarmCount > 0} />
+      <AlarmSiren enabled={alarmsEnabled} active={alarmsEnabled && (alarmCount > 0 || testSiren)} />
     </div>
   );
 }
