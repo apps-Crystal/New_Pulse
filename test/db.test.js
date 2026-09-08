@@ -378,8 +378,9 @@ test('db module: panel limits are read without a time window, folded into the ro
   assert.equal(snap.rooms.frozen_room_1.setHigh, -14);
   assert.equal(snap.rooms.frozen_room_1.temperature, -1);   // a limit row never becomes the temperature
   assert.equal(snap.rooms.frozen_room_1.offline, false);
-  assert.equal(snap.rooms.chiller_room_5.limitsInvalid, true);
-  assert.equal(snap.rooms.chiller_room_5.alarm, false);
+  assert.equal(snap.rooms.chiller_room_5.limitsSwapped, true);
+  assert.equal(snap.rooms.chiller_room_5.setLow, -15);
+  assert.equal(snap.rooms.chiller_room_5.alarm, false);       // -1 sits inside -15..0
   assert.equal(snap.rooms.frozen_room_3.setLow, null);      // no limit rows for it: no limits
   assert.equal(db.getStatus().queryCount, 1, 'the limits query is not a snapshot query');
   // Cached: the next poll re-reads temperatures but not the limits.

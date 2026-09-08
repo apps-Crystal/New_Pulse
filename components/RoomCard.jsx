@@ -73,7 +73,12 @@ export default function RoomCard({ room, alarmsEnabled = true }) {
 
       {/* Bottom: setpoint range + status label */}
       <div className="flex items-center justify-between gap-2">
-        <span className="tabular whitespace-nowrap font-mono text-[11px] text-slate-500">{range}</span>
+        <span
+          className="tabular whitespace-nowrap font-mono text-[11px] text-slate-500"
+          title={room.limitsSwapped ? 'The panel has these two the other way round; shown corrected' : undefined}
+        >
+          {range}{room.limitsSwapped ? ' \u21c4' : ''}
+        </span>
         {label && <span className={`whitespace-nowrap text-[11px] font-bold uppercase tracking-wide ${labelClass}`}>{label}</span>}
       </div>
     </div>

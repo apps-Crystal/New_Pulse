@@ -47,7 +47,7 @@ test('database path: a limit row for an unknown room is still an unknown room, n
 
 // What the panel actually holds today: Dock Area has 0 / 0 (nobody configured it) and Chiller Room 5 has
 // SET LOW 0 above SET HIGH -15 (a slip on the panel). Neither may become a false alarm.
-test('database path: equal limits mean "not configured", low above high is flagged and never alarms', () => {
+test('database path: equal limits mean "not configured", low above high is the band the other way round', () => {
   const r = rowsToSnapshot(long, [
     { room: 'Dock Area', temperature: 0, ts_ms: NOW },
     { room: 'Dock Area Set Low', temperature: 0, ts_ms: NOW },
@@ -60,16 +60,16 @@ test('database path: equal limits mean "not configured", low above high is flagg
   assert.equal(r.dock_area.setHigh, null);
   assert.equal(r.dock_area.limitsInvalid, false);
   assert.equal(r.dock_area.alarm, false);
-  assert.equal(r.chiller_room_5.setLow, 0);       // shown as the panel has it
-  assert.equal(r.chiller_room_5.setHigh, -15);
-  assert.equal(r.chiller_room_5.limitsInvalid, true);
-  assert.equal(r.chiller_room_5.alarm, false);
-  // The operator file may still fill an unconfigured room; it never un-flags an inverted one.
+  assert.equal(r.chiller_room_5.setLow, -15);     // the panel's pair, the right way round
+  assert.equal(r.chiller_room_5.setHigh, 0);
+  assert.equal(r.chiller_room_5.limitsSwapped, true);
+  assert.equal(r.chiller_room_5.alarm, true);      // -19.1 is below -15: evaluated on the corrected band
+  // The operator file may still fill an unconfigured room; it never overrides a corrected one.
   applySetpoints(r, { dock_area: { setLow: -5, setHigh: 25 }, chiller_room_5: { setLow: -25, setHigh: -15 } });
   assert.equal(r.dock_area.setLow, -5);
   assert.equal(r.dock_area.alarm, false);
-  assert.equal(r.chiller_room_5.setLow, 0);
-  assert.equal(r.chiller_room_5.alarm, false);
+  assert.equal(r.chiller_room_5.setLow, -15);
+  assert.equal(r.chiller_room_5.alarm, true);
 });
 
 // The live path builds rooms before a screen's limit rows have arrived, then fills them from the database
@@ -86,9 +86,10 @@ test('applySetpoints: limits it fills in follow the band rules before the alarm 
     dock_area: { setLow: 0, setHigh: 0 },
     frozen_room_3: { setLow: -15, setHigh: 30 },
   });
-  assert.equal(r.chiller_room_5.limitsInvalid, true);
-  assert.equal(r.chiller_room_5.alarm, false);
-  assert.equal(r.chiller_room_5.setLow, 0);
+  assert.equal(r.chiller_room_5.limitsSwapped, true);
+  assert.equal(r.chiller_room_5.setLow, -15);
+  assert.equal(r.chiller_room_5.setHigh, 0);
+  assert.equal(r.chiller_room_5.alarm, true);      // -20.5 is below -15
   assert.equal(r.dock_area.setLow, null);
   assert.equal(r.dock_area.setHigh, null);
   assert.equal(r.dock_area.alarm, false);

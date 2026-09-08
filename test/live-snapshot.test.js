@@ -95,18 +95,20 @@ test('live-snapshot: limit tags follow the same band rules as the database path'
     { tag: 'Frozen Room 1 Set High', value: 0, ts: NOW },
   ], NOW);
   const { rooms } = snap.buildRooms(state, { now: NOW, staleMs: 600000 });
-  assert.equal(rooms.chiller_room_5.limitsInvalid, true);
-  assert.equal(rooms.chiller_room_5.alarm, false);
+  assert.equal(rooms.chiller_room_5.limitsSwapped, true);
+  assert.equal(rooms.chiller_room_5.setLow, -15);
+  assert.equal(rooms.chiller_room_5.alarm, true);
   assert.equal(rooms.dock_area.setLow, null);
   assert.equal(rooms.dock_area.limitsInvalid, false);
   assert.equal(rooms.frozen_room_1.setLow, -20);
   assert.equal(rooms.frozen_room_1.alarm, false);
 });
 
-test('live-snapshot: a room seeded with an impossible band before its own limit rows arrive is flagged, not alarmed', () => {
+test('live-snapshot: a room seeded with a reversed band before its own limit rows arrive is corrected the same way', () => {
   const state = snap.createLiveState();
   snap.ingest(state, [{ tag: 'Chiller Room 5', value: -20.5, ts: NOW }], NOW);   // screen 2's limits not here yet
   const { rooms } = snap.buildRooms(state, { now: NOW, staleMs: 600000, setpoints: { chiller_room_5: { setLow: 0, setHigh: -15 } } });
-  assert.equal(rooms.chiller_room_5.limitsInvalid, true);
-  assert.equal(rooms.chiller_room_5.alarm, false);
+  assert.equal(rooms.chiller_room_5.limitsSwapped, true);
+  assert.equal(rooms.chiller_room_5.setLow, -15);
+  assert.equal(rooms.chiller_room_5.alarm, true);
 });
