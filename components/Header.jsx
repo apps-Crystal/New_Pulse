@@ -49,7 +49,7 @@ export default function Header({ connected, source, alarmsEnabled, onEnableAlarm
           </div>
           <div className="min-w-0">
             <div className="truncate text-xl font-semibold leading-tight text-white sm:text-[22px]">Crystal Pulse</div>
-            <div className="truncate text-[11px] uppercase tracking-[0.18em] text-slate-400">Cold Storage · All Sites</div>
+            <div className="truncate text-[11px] uppercase tracking-[0.18em] text-slate-400">Cold Storage · Dankuni Site</div>
           </div>
         </div>
 
