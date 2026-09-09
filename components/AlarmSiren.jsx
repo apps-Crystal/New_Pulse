@@ -80,7 +80,7 @@ export default function AlarmSiren({ active, enabled = true }) {
     return (
       <button
         onClick={() => {}}
-        className="fixed inset-0 z-[100000] flex flex-col items-center justify-center gap-5 text-white"
+        className="fixed inset-0 z-[9999] flex flex-col items-center justify-center gap-5 text-white"
         style={{ background: 'linear-gradient(180deg, rgba(127,29,29,0.97) 0%, #2a0707 100%)' }}
       >
         <span
@@ -98,7 +98,7 @@ export default function AlarmSiren({ active, enabled = true }) {
   // Small unobtrusive arm button when idle and not yet armed.
   if (!armed) {
     return (
-      <div className="fixed bottom-4 right-4 z-[100000] lg:bottom-2 lg:left-1/2 lg:right-auto lg:-translate-x-1/2">
+      <div className="fixed bottom-4 right-4 z-[9999] lg:bottom-2 lg:left-1/2 lg:right-auto lg:-translate-x-1/2">
         <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-300 backdrop-blur-md">
           <VolumeX size={14} /> Sound muted · click anywhere to arm
         </div>
