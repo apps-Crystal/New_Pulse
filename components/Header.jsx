@@ -40,7 +40,7 @@ export default function Header({ connected, source, alarmsEnabled, onEnableAlarm
   const pill = feedPill(connected, source);
 
   return (
-    <header className="shrink-0">
+    <header className="relative z-[10000] shrink-0">{/* above the alarm takeover, so the switch stays reachable while an alarm rings */}
       <div className="mx-auto flex min-h-[70px] w-full max-w-7xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2 sm:px-6">
         {/* Left: logo tile + title */}
         <div className="flex min-w-0 items-center gap-3">
