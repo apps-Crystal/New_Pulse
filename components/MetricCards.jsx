@@ -32,7 +32,7 @@ export default function MetricCards({ total, normal, alarm, warning, alarmsEnabl
         valueClass={off ? 'text-slate-500 text-[22px]' : 'text-[#facc15]'}
       />
       <MetricCard
-        label="Temp Alarms"
+        label="Alarms"
         value={off ? 'Off' : String(alarm)}
         labelClass={off ? 'text-slate-300' : 'text-[#f87171]'}
         valueClass={off ? 'text-slate-500 text-[22px]' : 'text-[#f87171]'}

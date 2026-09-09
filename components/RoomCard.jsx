@@ -2,22 +2,32 @@
 import { DoorOpen, DoorClosed } from 'lucide-react';
 import { zoneStatus, WARN_MARGIN } from '../lib/format';
 
-// The room's door contacts from the panel's INPUT screen; a room can have two (Chiller Room 1).
-function DoorPills({ doors }) {
+function fmtOpenFor(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(s / 60);
+  return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}:${String(s % 60).padStart(2, '0')}`;
+}
+
+// The room's door contacts from the panel's INPUT screen; a room can have two (Chiller Room 1). An open
+// door shows how long it has been open; once it is an alarm the pill turns red with the card.
+function DoorPills({ doors, alarm }) {
   if (!doors || doors.length === 0) return null;
+  const now = Date.now();
   return (
     <div className="flex shrink-0 flex-col items-end gap-1">
       {doors.map((d) => (
         <span
           key={d.tag}
-          title={`${d.tag}: ${d.open ? 'OPEN' : 'closed'}`}
+          title={`${d.tag}: ${d.open ? `OPEN for ${fmtOpenFor(now - d.since)}` : 'closed'}`}
           className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${d.open ? 'animate-pulse' : ''}`}
           style={d.open
-            ? { color: '#fcd34d', background: 'rgba(245,158,11,0.16)', borderColor: 'rgba(245,158,11,0.55)' }
+            ? (alarm
+              ? { color: '#fecaca', background: 'rgba(239,68,68,0.22)', borderColor: 'rgba(239,68,68,0.6)' }
+              : { color: '#fcd34d', background: 'rgba(245,158,11,0.16)', borderColor: 'rgba(245,158,11,0.55)' })
             : { color: '#64748b', background: 'rgba(255,255,255,0.03)', borderColor: 'rgba(255,255,255,0.08)' }}
         >
           {d.open ? <DoorOpen size={11} /> : <DoorClosed size={11} />}
-          {doors.length > 1 ? `${d.label.replace('Door ', 'D')} ` : ''}{d.open ? 'Open' : 'Closed'}
+          {doors.length > 1 ? `${d.label.replace('Door ', 'D')} ` : ''}{d.open ? `Open ${fmtOpenFor(now - d.since)}` : 'Closed'}
         </span>
       ))}
     </div>
@@ -41,9 +51,11 @@ const TINT = {
   offline: { background: 'rgba(0,0,0,0.18)' },
 };
 
-export default function RoomCard({ room, alarmsEnabled = true, doors = null }) {
+export default function RoomCard({ room, alarmsEnabled = true, doors = null, doorAlarm = false }) {
   // Alarms off: the card keeps its limits line but never colours; only "no signal" still shows.
-  const status = alarmsEnabled ? zoneStatus(room) : zoneStatus(room) === 'offline' ? 'offline' : 'ok';
+  // A door alarm colours the card red like a temperature alarm.
+  const tempStatus = alarmsEnabled ? zoneStatus(room) : zoneStatus(room) === 'offline' ? 'offline' : 'ok';
+  const status = alarmsEnabled && doorAlarm && tempStatus !== 'alarm' ? 'alarm' : tempStatus;
   const t = room.temperature;
   const outHigh = room.setHigh != null && t != null && t > room.setHigh;
   const nearHigh = room.setHigh != null && t != null && t >= room.setHigh - WARN_MARGIN;
@@ -51,7 +63,7 @@ export default function RoomCard({ room, alarmsEnabled = true, doors = null }) {
   let label = null;
   let labelClass = '';
   if (status === 'alarm') {
-    label = outHigh ? 'TEMP TOO HIGH' : 'TEMP TOO LOW';
+    label = tempStatus === 'alarm' ? (outHigh ? 'TEMP TOO HIGH' : 'TEMP TOO LOW') : 'DOOR OPEN';
     labelClass = 'text-[#f87171]';
   } else if (status === 'warning') {
     label = room.limitsInvalid ? 'LIMITS INVALID' : nearHigh ? 'NEAR HIGH' : 'NEAR LOW';
@@ -62,7 +74,7 @@ export default function RoomCard({ room, alarmsEnabled = true, doors = null }) {
   }
 
   const tempClass =
-    status === 'alarm' ? 'text-[#f87171]' : status === 'warning' ? 'text-[#facc15]' : 'text-white';
+    tempStatus === 'alarm' ? 'text-[#f87171]' : tempStatus === 'warning' ? 'text-[#facc15]' : 'text-white';
   const range = status === 'offline' ? '— — —' : `${fmtSide(room.setLow)} — ${fmtSide(room.setHigh)}`;
 
   return (
@@ -94,7 +106,7 @@ export default function RoomCard({ room, alarmsEnabled = true, doors = null }) {
             </>
           )}
         </div>
-        <DoorPills doors={doors} />
+        <DoorPills doors={doors} alarm={alarmsEnabled && doorAlarm} />
       </div>
 
       {/* Bottom: setpoint range + status label */}

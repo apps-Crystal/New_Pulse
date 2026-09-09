@@ -1,3 +1,4 @@
+process.env.NEXT_PUBLIC_FIXED_LIMITS = 'false'; // these tests are about the panel's own limits
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { ZONES } = require('../lib/zones');

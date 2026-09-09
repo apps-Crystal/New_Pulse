@@ -42,6 +42,12 @@ function fmtSide(v) {
   return v == null || Number.isNaN(v) ? '—' : v.toFixed(1);
 }
 
+function fmtOpen(ms) {
+  const s = Math.max(0, Math.floor((ms || 0) / 1000));
+  const m = Math.floor(s / 60);
+  return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}:${String(s % 60).padStart(2, '0')}`;
+}
+
 // Dynamic sizing configuration based on alarm count (phone sizes first, desktop sizes from `md` up).
 function getLayoutConfig(count) {
   // Single alarm: maximum size, centred
@@ -113,6 +119,7 @@ export default function AlarmModal({ alarms, silenced = [], onSilence, onRingAga
   if (!alarms || alarms.length === 0) return null;
 
   const ringing = alarms.filter((a) => !silenced.includes(a.id));
+  const silenceable = ringing.some((a) => a.kind !== 'panic');
 
   // Every active alarm acknowledged: a banner instead of the takeover, so the screen is usable again.
   if (ringing.length === 0) {
@@ -126,7 +133,7 @@ export default function AlarmModal({ alarms, silenced = [], onSilence, onRingAga
           <span className="h-2 w-2 rounded-full" style={{ background: '#ef4444', boxShadow: '0 0 8px rgba(239,68,68,0.9)' }} />
           <span>Siren silenced · {alarms.length === 1 ? '1 alarm' : `${alarms.length} alarms`} still active:</span>
           <span className="tabular font-mono normal-case tracking-normal text-white">
-            {alarms.map((a) => (a.kind === 'panic' ? `${a.label} PRESSED` : `${a.label} ${a.temperature == null ? '—' : a.temperature.toFixed(1)} °C`)).join(' · ')}
+            {alarms.map((a) => (a.kind === 'panic' ? `${a.label} PRESSED` : a.kind === 'door' ? `${a.label} door open ${fmtOpen(a.openMs)}` : `${a.label} ${a.temperature == null ? '—' : a.temperature.toFixed(1)} °C`)).join(' · ')}
           </span>
           <button
             type="button"
@@ -183,7 +190,8 @@ export default function AlarmModal({ alarms, silenced = [], onSilence, onRingAga
           {alarms.map((a, i) => {
             const outHigh = a.setHigh != null && a.temperature != null && a.temperature > a.setHigh;
             const panic = a.kind === 'panic';
-            const message = panic ? 'PANIC BUTTON PRESSED' : outHigh ? 'TEMP TOO HIGH' : 'TEMP TOO LOW';
+            const door = a.kind === 'door';
+            const message = panic ? 'PANIC BUTTON PRESSED' : door ? 'DOOR OPEN' : outHigh ? 'TEMP TOO HIGH' : 'TEMP TOO LOW';
             const t = a.temperature;
 
             return (
@@ -209,7 +217,12 @@ export default function AlarmModal({ alarms, silenced = [], onSilence, onRingAga
                   {panic ? (
                     <>
                       <div className={`${layout.temp} font-bold uppercase leading-none text-[#f87171]`}>Help</div>
-                      <div className={`${layout.range} text-slate-300`}>Someone may be trapped or in trouble — go to the room now</div>
+                      <div className={`${layout.range} text-slate-300`}>Someone may be trapped or in trouble — go to the room now. This alarm cannot be silenced here: it stops when the button is released.</div>
+                    </>
+                  ) : door ? (
+                    <>
+                      <div className={`${layout.temp} tabular font-mono font-bold leading-none text-[#f87171]`}>{fmtOpen(a.openMs)}</div>
+                      <div className={`${layout.range} text-slate-300`}>open — close the door</div>
                     </>
                   ) : (
                     <>
@@ -242,14 +255,20 @@ export default function AlarmModal({ alarms, silenced = [], onSilence, onRingAga
 
         {/* Bottom: silence control + message */}
         <div className="flex flex-col items-center gap-3">
-          <button
-            type="button"
-            onClick={onSilence}
-            className="pointer-events-auto inline-flex items-center gap-2 rounded-full border px-6 py-3 text-[13px] font-bold uppercase tracking-[0.2em] text-white transition-colors hover:bg-white/10 md:px-8"
-            style={{ background: 'rgba(11,15,30,0.85)', borderColor: 'rgba(255,255,255,0.35)', boxShadow: '0 8px 30px rgba(0,0,0,0.45)' }}
-          >
-            Silence siren
-          </button>
+          {silenceable ? (
+            <button
+              type="button"
+              onClick={onSilence}
+              className="pointer-events-auto inline-flex items-center gap-2 rounded-full border px-6 py-3 text-[13px] font-bold uppercase tracking-[0.2em] text-white transition-colors hover:bg-white/10 md:px-8"
+              style={{ background: 'rgba(11,15,30,0.85)', borderColor: 'rgba(255,255,255,0.35)', boxShadow: '0 8px 30px rgba(0,0,0,0.45)' }}
+            >
+              Silence siren{ringing.some((a) => a.kind === 'panic') ? ' (panic keeps ringing)' : ''}
+            </button>
+          ) : (
+            <div className="inline-flex items-center gap-2 rounded-full border px-6 py-3 text-[12px] font-bold uppercase tracking-[0.2em] text-[#fca5a5]" style={{ background: 'rgba(11,15,30,0.85)', borderColor: 'rgba(239,68,68,0.5)' }}>
+              Panic alarm — rings until the button is released
+            </div>
+          )}
           <div
             className="flex items-center justify-center rounded-full border px-5 py-2 text-center md:px-8"
             style={{ background: 'rgba(0,0,0,0.3)', borderColor: 'rgba(255,255,255,0.1)' }}

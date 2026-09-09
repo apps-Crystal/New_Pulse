@@ -9,7 +9,13 @@ import AlarmSiren from './AlarmSiren';
 import LogTabs from './LogTabs';
 import PanicStrip from './PanicStrip';
 import { zoneStatus, fmtClock } from '../lib/format';
-import { classifyInputs } from '../lib/inputs';
+import { classifyInputs, doorAlarms } from '../lib/inputs';
+
+// A door open this long is an alarm (red card, takeover, siren while alarms are on).
+const DOOR_ALARM_MS = (() => {
+  const n = Number(process.env.NEXT_PUBLIC_DOOR_ALARM_MS);
+  return Number.isFinite(n) && n >= 1000 ? n : 30000;
+})();
 import { connectLive, liveTransport } from '../lib/live-client';
 
 // Two ways in, one shape out. The plant collector's readings arrive live - through Supabase Realtime
@@ -184,7 +190,22 @@ export default function Dashboard() {
       }
       prevPanicRef.current.set(p.tag, p.pressed);
     }
-    // Doors: every open / close transition goes to the event log (never an alarm).
+    // Doors: open for DOOR_ALARM_MS or more is an alarm (while alarms are on); every open / close is an event.
+    for (const d of doorAlarms(io, now, DOOR_ALARM_MS)) {
+      if (!armed) { sinceRef.current.delete(`door:${d.tag}`); continue; }
+      if (!sinceRef.current.has(`door:${d.tag}`)) {
+        sinceRef.current.set(`door:${d.tag}`, now);
+        newEvents.push({ key: `e${eventSeq.current++}`, time: fmtClock(), type: `DOOR OPEN ${Math.round(DOOR_ALARM_MS / 1000)} S`, zone: d.twoDoors ? `${d.room} ${d.label}` : d.room, active: true });
+      }
+      nextAlarms.push({ id: `door:${d.tag}`, label: d.twoDoors ? `${d.room} ${d.label}` : d.room, kind: 'door', zoneId: d.zoneId, openMs: d.openMs, since: d.since });
+    }
+    for (const key of [...sinceRef.current.keys()]) {
+      if (key.startsWith('door:') && !nextAlarms.some((a) => a.id === key)) {
+        sinceRef.current.delete(key);
+        const tag = key.slice(5);
+        newEvents.push({ key: `e${eventSeq.current++}`, time: fmtClock(), type: 'DOOR ALARM RESOLVED', zone: tag.replace(/\s+Door(\s+\d+)?$/i, ''), active: false });
+      }
+    }
     for (const list of Object.values(io.doors)) {
       for (const d of list) {
         const prev = prevDoorRef.current.get(d.tag);
@@ -304,6 +325,12 @@ export default function Dashboard() {
     try { stored = window.localStorage.getItem('pulse.alarmsEnabled') === 'true'; } catch { stored = false; }
     if (stored) setAlarmsEnabled(true);
   }, []);
+  // Door timers run between snapshots: re-evaluate the last snapshot every few seconds so a door crossing
+  // the alarm threshold, and the "open for" clocks on the cards, do not wait for the next reading.
+  useEffect(() => {
+    const id = setInterval(() => { const last = lastSnapshotRef.current; if (last) applySnapshot(last.data, last.from); }, 5000);
+    return () => clearInterval(id);
+  }, [applySnapshot]);
   useEffect(() => {
     alarmsEnabledRef.current = alarmsEnabled;
     try { window.localStorage.setItem('pulse.alarmsEnabled', alarmsEnabled ? 'true' : 'false'); } catch { /* private mode: not remembered */ }
@@ -311,8 +338,9 @@ export default function Dashboard() {
     if (last) applySnapshot(last.data, last.from);
   }, [alarmsEnabled, applySnapshot]);
 
+  // A pressed panic button cannot be silenced from a screen: it rings until the button is released.
   const silenceAlarms = useCallback(() => {
-    for (const a of alarms) silencedRef.current.add(a.id);
+    for (const a of alarms) if (a.kind !== 'panic') silencedRef.current.add(a.id);
     setSilenced([...silencedRef.current]);
   }, [alarms]);
   const ringAgain = useCallback(() => {
@@ -324,6 +352,7 @@ export default function Dashboard() {
   const alarmCount = alarms.length;
   const ringing = alarms.filter((a) => !silenced.includes(a.id));
   const io = classifyInputs(inputs, Date.now());
+  const doorAlarmZones = new Set(alarms.filter((a) => a.kind === 'door').map((a) => a.zoneId));
   const warnCount = warnings.length;
   const offlineCount = rooms.filter((r) => zoneStatus(r) === 'offline').length;
   const normalCount = rooms.filter((r) => (alarmsEnabled ? zoneStatus(r) === 'ok' : zoneStatus(r) !== 'offline')).length;
@@ -357,7 +386,7 @@ export default function Dashboard() {
               ? Array.from({ length: 16 }).map((_, i) => (
                   <div key={i} className="card h-32 animate-pulse lg:h-full" />
                 ))
-              : rooms.map((room) => <RoomCard key={room.id} room={room} alarmsEnabled={alarmsEnabled} doors={io.doors[room.id] || null} />)}
+              : rooms.map((room) => <RoomCard key={room.id} room={room} alarmsEnabled={alarmsEnabled} doors={io.doors[room.id] || null} doorAlarm={doorAlarmZones.has(room.id)} />)}
           </div>
         </div>
 

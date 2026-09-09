@@ -44,3 +44,21 @@ test('inputs: unknown rooms and junk never throw', () => {
   assert.deepEqual(io.other.map((o) => o.tag), ['Whatever']);
   assert.deepEqual(classifyInputs(null, NOW).panic, []);
 });
+
+const { doorAlarms } = require('../lib/inputs');
+test('inputs: a door open for the alarm time is an alarm, a fresh opening is not; `since` is the clock', () => {
+  const rows = [
+    { tag: 'Chiller Room 2 Door', value: 1, ts: NOW - 1000, since: NOW - 45000 },
+    { tag: 'Frozen Room 1 Door', value: 1, ts: NOW - 1000, since: NOW - 5000 },
+    { tag: 'Chiller Room 1 Door 2', value: 1, ts: NOW - 1000, since: NOW - 120000 },
+    { tag: 'Chiller Room 1 Door 1', value: 0, ts: NOW - 1000, since: NOW - 900000 },
+  ];
+  const io = classifyInputs(rows, NOW);
+  assert.equal(io.doors.chiller_room_2[0].since, NOW - 45000);
+  const alarms = doorAlarms(io, NOW, 30000);
+  assert.deepEqual(alarms.map((a) => [a.zoneId, a.label, a.openMs, a.twoDoors]), [
+    ['chiller_room_1', 'Door 2', 120000, true],
+    ['chiller_room_2', 'Door', 45000, false],
+  ]);
+  assert.deepEqual(doorAlarms(classifyInputs([{ tag: 'Frozen Room 1 Door', value: 1, ts: NOW }], NOW), NOW, 30000), []);  // no since: opened now
+});

@@ -120,6 +120,14 @@ Precedence: set-point columns in the database (auto-detected or `PULSE_SET_LOW_C
 
 Alarms are off on every screen until someone clicks **Alarms off** in the header and answers **Yes, start alarms**. Off means the limits are still shown under each temperature but no room colours, the Warnings / Temp Alarms tiles read "Off", and no toast, modal, siren or event fires. The answer is remembered per browser (`localStorage`), so a wall display keeps it across reloads and deploys; clicking **Alarms on** switches them off again. While they are on, **Test sound** next to the switch plays the siren for four seconds so a wall screen's audio can be checked without waiting for a real alarm. The siren itself only sounds while a room is outside its limits; near-limit warnings are silent. While an alarm rings, **Silence siren** on the alert screen acknowledges every alarm on that screen: the sound stops and the takeover shrinks to a banner (with **Ring again**) while the rooms stay red. A new room going into alarm, or a silenced room clearing and alarming again, brings the siren and the takeover back.
 
+### Fixed alarm bands
+
+Since 9 Sep 2026 the alarm bands are fixed in `lib/limits.js` and override the panel and the operator file on both paths: frozen rooms and blast freezers −22 to −18 °C, chilled rooms +2 to +4 °C, anterooms +2 to +8 °C, nothing for the dock. `NEXT_PUBLIC_FIXED_LIMITS=false` goes back to the panel's limits.
+
+### Door and panic alarms
+
+A door open for `NEXT_PUBLIC_DOOR_ALARM_MS` (default 30 s) is an alarm like a temperature excursion: red card with an "open for" clock, takeover and siren while alarms are on, cleared when the door closes. A pressed panic button is an alarm that **cannot be silenced from a screen** — it rings until the button is released. The header switch is the single master switch for every alarm kind (temperature, door, panic).
+
 ### Doors, panic buttons and the panel's alarm log
 
 When the collector also visits the panel's INPUT, ALARM and ALARM HIST pages (its `NAV_BUTTONS`), every snapshot carries `inputs` (`[{ tag, value, ts }]`, value 1 = ON as the panel shows it) and `panelAlarms` (`{ active, recent, at }`, the panel's own alarm log). On the live path they ride along with the readings; on the database path they come from `panel_inputs` (newest row per tag) and `panel_alarms`. The dashboard shows a door pill beside each room's temperature, a panic-button strip under the metric tiles, and a **Panel alarm history** tab beside today's events (`GET /api/alarms?limit=300` serves the longer history). A pressed panic button is an alarm like a temperature excursion while alarms are on, and is shown red in the strip either way; door open / close transitions are logged as events.
