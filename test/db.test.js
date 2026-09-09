@@ -71,6 +71,7 @@ function fakePool(spec) {
       if (/information_schema\.columns WHERE/.test(text)) return { rows: spec.refColumns || [] };
       if (/\/\* limits \*\//.test(text)) return typeof spec.limits === 'function' ? spec.limits(q) : { rows: spec.limits || [] };
       if (/\/\* inputs \*\//.test(text)) return { rows: spec.inputs || [] };
+      if (/\/\* room_settings \*\//.test(text)) { if (/insert into/.test(text)) { spec.written = (spec.written || []).concat([q.values]); } return { rows: spec.roomSettings || [] }; }
       if (/\/\* alarms \*\//.test(text)) return { rows: spec.alarms || [] };
       return spec.onQuery(text);
     },
@@ -430,4 +431,27 @@ test('db module: panel inputs and the panel alarm log are part of the snapshot; 
   assert.equal(snap2.ok, true, snap2.error);
   assert.deepEqual(snap2.inputs, []);
   assert.deepEqual(snap2.panelAlarms.active, []);
+}));
+
+// Per-room "in service" settings live in room_settings and ride on the snapshot; a room that is off keeps
+// its readings but never carries an alarm.
+test('db module: room settings are read with the snapshot and written through setRoomOperational', withEnv(async (db) => {
+  const pool = fakePool({
+    discovery: disc('temperature_readings', [['id', 'bigint'], ['room', 'text'], ['temperature', 'numeric'], ['recorded_at', 'timestamp with time zone']]),
+    onQuery: (text) => ({ rows: /interval '20 minutes'/.test(text) ? ZONES.map((z) => row(z.label, 25)) : [] }),   // every room at +25: out of every fixed band
+    roomSettings: [{ zone_id: 'frozen_room_3', operational: false, updated_ms: Date.now() - 1000 }, { zone_id: 'nope', operational: false, updated_ms: 1 }],
+  });
+  db._setPoolForTests(pool);
+  const snap = await db.getSnapshot();
+  assert.equal(snap.ok, true, snap.error);
+  assert.equal(snap.rooms.frozen_room_3.operational, false);
+  assert.equal(snap.rooms.frozen_room_3.alarm, false);
+  assert.equal(snap.rooms.frozen_room_4.operational, true);
+  assert.equal(snap.rooms.frozen_room_4.alarm, process.env.NEXT_PUBLIC_FIXED_LIMITS === 'false' ? false : true);
+  assert.deepEqual(Object.keys(snap.roomSettings), ['frozen_room_3']);          // unknown zone ids are dropped
+  assert.ok(pool.calls.some((c) => /create table if not exists "public"\."room_settings"/.test(c.text)), 'the table is created on first use');
+  await db.setRoomOperational('chiller_room_5', false);
+  const ins = pool.calls.filter((c) => /insert into "public"\."room_settings"/.test(c.text));
+  assert.deepEqual(ins[ins.length - 1].values, ['chiller_room_5', false]);
+  await assert.rejects(() => db.setRoomOperational('kitchen', false), /unknown zone/);
 }));

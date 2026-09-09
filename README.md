@@ -124,6 +124,10 @@ Alarms are off on every screen until someone clicks **Alarms off** in the header
 
 Since 9 Sep 2026 the alarm bands are fixed in `lib/limits.js` and override the panel and the operator file on both paths: frozen rooms and blast freezers −22 to −18 °C, chilled rooms +2 to +4 °C, anterooms +2 to +8 °C, nothing for the dock. `NEXT_PUBLIC_FIXED_LIMITS=false` goes back to the panel's limits.
 
+### Rooms out of service
+
+Each room card has a small switch (bottom right). Switching a room **out of service** dims the card, keeps its temperature and door state on screen, and stops every alarm and warning from it — temperature, door, all of them — on every screen, because the setting is stored in Postgres (`room_settings`, created on first use by the dashboard's own database role, row-level security on) and served by `GET /api/rooms` / `PATCH /api/rooms { id, operational }`. Screens refresh it every minute; the Total Zones tile says how many are out of service.
+
 ### Door and panic alarms
 
 A door open for `NEXT_PUBLIC_DOOR_ALARM_MS` (default 30 s) is an alarm like a temperature excursion: red card with an "open for" clock, takeover and siren while alarms are on, cleared when the door closes. A pressed panic button is an alarm that **cannot be silenced from a screen** — it rings until the button is released. The header switch is the single master switch for every alarm kind (temperature, door, panic).

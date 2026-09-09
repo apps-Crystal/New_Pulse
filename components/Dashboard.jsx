@@ -10,6 +10,7 @@ import LogTabs from './LogTabs';
 import PanicStrip from './PanicStrip';
 import { zoneStatus, fmtClock } from '../lib/format';
 import { classifyInputs, doorAlarms } from '../lib/inputs';
+import { applyRoomSettings, isOperational } from '../lib/rooms';
 
 // A door open this long is an alarm (red card, takeover, siren while alarms are on).
 const DOOR_ALARM_MS = (() => {
@@ -68,6 +69,10 @@ export default function Dashboard() {
   const [panelAlarms, setPanelAlarms] = useState(null);
   const prevDoorRef = useRef(new Map());   // door tag -> open
   const prevPanicRef = useRef(new Map());  // panic tag -> pressed
+  // Per-room "in service / out of service", shared through the database (/api/rooms). A room that is
+  // off keeps its readings on screen but can never raise an alarm, a warning or a door alarm.
+  const [roomSettings, setRoomSettings] = useState({});
+  const roomSettingsRef = useRef({});
   const testTimerRef = useRef(null);
   const testSound = useCallback(() => {
     clearTimeout(testTimerRef.current);
@@ -100,6 +105,10 @@ export default function Dashboard() {
 
     const roomMap = data.rooms || {};
     const list = Object.entries(roomMap).map(([id, r]) => ({ id, ...r }));
+    // A snapshot from the server already carries the shared settings; a live one is built here without them.
+    if (data.roomSettings && typeof data.roomSettings === 'object') { roomSettingsRef.current = data.roomSettings; setRoomSettings(data.roomSettings); }
+    applyRoomSettings(list, roomSettingsRef.current);
+    const operationalById = new Map(list.map((r) => [r.id, isOperational(r)]));
     setRooms(list);
     if (from === 'db' && data.connected) {
       // Remember database-provided limits per room (merge, never wipe) so live snapshots keep them.
@@ -125,7 +134,7 @@ export default function Dashboard() {
     for (const room of list) {
       // With alarms off a room is only ever ok or offline, so the moment they are switched on every room
       // already outside its limits raises a fresh alarm and a fresh event.
-      const status = armed ? zoneStatus(room) : zoneStatus(room) === 'offline' ? 'offline' : 'ok';
+      const status = !isOperational(room) ? 'off' : armed ? zoneStatus(room) : zoneStatus(room) === 'offline' ? 'offline' : 'ok';
       const prev = prevStatusRef.current.get(room.id) || 'ok';
 
       if (status === 'alarm') {
@@ -192,7 +201,7 @@ export default function Dashboard() {
     }
     // Doors: open for DOOR_ALARM_MS or more is an alarm (while alarms are on); every open / close is an event.
     for (const d of doorAlarms(io, now, DOOR_ALARM_MS)) {
-      if (!armed) { sinceRef.current.delete(`door:${d.tag}`); continue; }
+      if (!armed || operationalById.get(d.zoneId) === false) { sinceRef.current.delete(`door:${d.tag}`); continue; }
       if (!sinceRef.current.has(`door:${d.tag}`)) {
         sinceRef.current.set(`door:${d.tag}`, now);
         newEvents.push({ key: `e${eventSeq.current++}`, time: fmtClock(), type: `DOOR OPEN ${Math.round(DOOR_ALARM_MS / 1000)} S`, zone: d.twoDoors ? `${d.room} ${d.label}` : d.room, active: true });
@@ -257,6 +266,45 @@ export default function Dashboard() {
     const l = liveRef.current;
     return l.up && Date.now() - l.lastAt < LIVE_STALE_MS;
   };
+
+  // Shared room settings: fetched on load and every minute so a switch flipped on another screen shows
+  // up here too; a flip on this screen applies at once and is then saved through /api/rooms.
+  useEffect(() => {
+    let stopped = false;
+    let timer = null;
+    const load = async (delayOnFail) => {
+      try {
+        const res = await fetch('/api/rooms', { cache: 'no-store' });
+        const j = await res.json();
+        if (j && j.ok && j.rooms) {
+          roomSettingsRef.current = j.rooms;
+          setRoomSettings(j.rooms);
+          const last = lastSnapshotRef.current;
+          if (last) applySnapshot(last.data, last.from);
+        }
+        if (!stopped) timer = setTimeout(() => load(15000), 60 * 1000);
+      } catch {
+        if (!stopped) timer = setTimeout(() => load(Math.min(delayOnFail * 2, 120000)), delayOnFail);
+      }
+    };
+    load(5000);
+    return () => { stopped = true; clearTimeout(timer); };
+  }, [applySnapshot]);
+
+  const toggleOperational = useCallback(async (id, operational) => {
+    const next = { ...roomSettingsRef.current, [id]: { ...(roomSettingsRef.current[id] || {}), operational } };
+    roomSettingsRef.current = next;
+    setRoomSettings(next);
+    const label = (lastSnapshotRef.current && lastSnapshotRef.current.data.rooms && lastSnapshotRef.current.data.rooms[id] && lastSnapshotRef.current.data.rooms[id].label) || id;
+    setEvents((prev) => [{ key: `e${eventSeq.current++}`, time: fmtClock(), type: operational ? 'ROOM BACK IN SERVICE' : 'ROOM OUT OF SERVICE', zone: label, active: false }, ...prev].slice(0, MAX_EVENTS));
+    const last = lastSnapshotRef.current;
+    if (last) applySnapshot(last.data, last.from);
+    try {
+      const res = await fetch('/api/rooms', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, operational }) });
+      const j = await res.json();
+      if (j && j.ok && j.rooms) { roomSettingsRef.current = j.rooms; setRoomSettings(j.rooms); }
+    } catch { /* keeps the local change; the minute refresh reconciles */ }
+  }, [applySnapshot]);
 
   // Operator set-points (and the server's OFFLINE threshold) for browser-built snapshots. Retried on
   // failure; refreshed every 5 minutes so an edited setpoints file / env var reaches open tabs.
@@ -355,7 +403,8 @@ export default function Dashboard() {
   const doorAlarmZones = new Set(alarms.filter((a) => a.kind === 'door').map((a) => a.zoneId));
   const warnCount = warnings.length;
   const offlineCount = rooms.filter((r) => zoneStatus(r) === 'offline').length;
-  const normalCount = rooms.filter((r) => (alarmsEnabled ? zoneStatus(r) === 'ok' : zoneStatus(r) !== 'offline')).length;
+  const normalCount = rooms.filter((r) => isOperational(r) && (alarmsEnabled ? zoneStatus(r) === 'ok' : zoneStatus(r) !== 'offline')).length;
+  const offCount = rooms.filter((r) => !isOperational(r)).length;
 
   let footer;
   if (source === null) {
@@ -377,7 +426,7 @@ export default function Dashboard() {
       <main className="scrollbar-thin mx-auto w-full max-w-7xl space-y-6 px-4 pb-6 pt-2 sm:px-6 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:gap-4 lg:space-y-0 lg:overflow-y-auto lg:pb-8 lg:pt-1">
         {/* First screen: metrics + 4x4 grid. At lg+ this section is exactly the height of <main>, so all 16 zones fit without scrolling. */}
         <div className="space-y-6 lg:flex lg:h-full lg:min-h-0 lg:shrink-0 lg:flex-col lg:gap-4 lg:space-y-0 lg:pb-3">
-          <MetricCards total={total} normal={normalCount} alarm={alarmCount} warning={warnCount} alarmsEnabled={alarmsEnabled} />
+          <MetricCards total={total} normal={normalCount} alarm={alarmCount} warning={warnCount} alarmsEnabled={alarmsEnabled} off={offCount} />
           <PanicStrip panic={io.panic} phase={io.phase} />
 
           {/* Room grid */}
@@ -386,7 +435,7 @@ export default function Dashboard() {
               ? Array.from({ length: 16 }).map((_, i) => (
                   <div key={i} className="card h-32 animate-pulse lg:h-full" />
                 ))
-              : rooms.map((room) => <RoomCard key={room.id} room={room} alarmsEnabled={alarmsEnabled} doors={io.doors[room.id] || null} doorAlarm={doorAlarmZones.has(room.id)} />)}
+              : rooms.map((room) => <RoomCard key={room.id} room={room} alarmsEnabled={alarmsEnabled} doors={io.doors[room.id] || null} doorAlarm={doorAlarmZones.has(room.id)} onToggleOperational={toggleOperational} />)}
           </div>
         </div>
 

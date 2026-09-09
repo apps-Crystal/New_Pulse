@@ -9,12 +9,12 @@ function MetricCard({ label, value, labelClass, valueClass, style }) {
   );
 }
 
-export default function MetricCards({ total, normal, alarm, warning, alarmsEnabled = true }) {
+export default function MetricCards({ total, normal, alarm, warning, alarmsEnabled = true, off: outOfService = 0 }) {
   const off = !alarmsEnabled;
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <MetricCard
-        label="Total Zones"
+        label={outOfService ? `Total Zones · ${outOfService} out of service` : 'Total Zones'}
         value={String(total)}
         labelClass="text-[#f79b1e]"
         valueClass="text-white"

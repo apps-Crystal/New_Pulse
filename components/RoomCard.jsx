@@ -39,6 +39,7 @@ function fmtSide(v) {
 }
 
 const DOT = {
+  off: { background: '#475569' },
   ok: { background: '#22c55e', boxShadow: '0 0 8px rgba(34,197,94,0.75)' },
   warning: { background: '#eab308', boxShadow: '0 0 8px rgba(234,179,8,0.6)' },
   alarm: { background: '#ef4444', boxShadow: '0 0 8px rgba(239,68,68,0.7)' },
@@ -46,16 +47,18 @@ const DOT = {
 };
 
 const TINT = {
+  off: { opacity: 0.55, borderStyle: 'dashed' },
   warning: { borderColor: 'rgba(234,179,8,0.55)', background: 'rgba(234,179,8,0.06)' },
   alarm: { borderColor: 'rgba(239,68,68,0.55)', background: 'rgba(239,68,68,0.08)' },
   offline: { background: 'rgba(0,0,0,0.18)' },
 };
 
-export default function RoomCard({ room, alarmsEnabled = true, doors = null, doorAlarm = false }) {
+export default function RoomCard({ room, alarmsEnabled = true, doors = null, doorAlarm = false, onToggleOperational = null }) {
   // Alarms off: the card keeps its limits line but never colours; only "no signal" still shows.
-  // A door alarm colours the card red like a temperature alarm.
-  const tempStatus = alarmsEnabled ? zoneStatus(room) : zoneStatus(room) === 'offline' ? 'offline' : 'ok';
-  const status = alarmsEnabled && doorAlarm && tempStatus !== 'alarm' ? 'alarm' : tempStatus;
+  // A door alarm colours the card red like a temperature alarm. A room out of service never colours at all.
+  const operational = room.operational !== false;
+  const tempStatus = !operational ? 'off' : alarmsEnabled ? zoneStatus(room) : zoneStatus(room) === 'offline' ? 'offline' : 'ok';
+  const status = operational && alarmsEnabled && doorAlarm && tempStatus !== 'alarm' ? 'alarm' : tempStatus;
   const t = room.temperature;
   const outHigh = room.setHigh != null && t != null && t > room.setHigh;
   const nearHigh = room.setHigh != null && t != null && t >= room.setHigh - WARN_MARGIN;
@@ -70,6 +73,9 @@ export default function RoomCard({ room, alarmsEnabled = true, doors = null, doo
     labelClass = 'text-[#facc15]';
   } else if (status === 'offline') {
     label = 'NO SIGNAL';
+    labelClass = 'text-slate-500';
+  } else if (status === 'off') {
+    label = 'OUT OF SERVICE';
     labelClass = 'text-slate-500';
   }
 
@@ -117,7 +123,28 @@ export default function RoomCard({ room, alarmsEnabled = true, doors = null, doo
         >
           {range}{room.limitsSwapped ? ' \u21c4' : ''}
         </span>
-        {label && <span className={`whitespace-nowrap text-[11px] font-bold uppercase tracking-wide ${labelClass}`}>{label}</span>}
+        <span className="flex items-center gap-2">
+          {label && <span className={`whitespace-nowrap text-[11px] font-bold uppercase tracking-wide ${labelClass}`}>{label}</span>}
+          {onToggleOperational && (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={operational}
+              aria-label={`${room.label}: ${operational ? 'in service' : 'out of service'}`}
+              title={operational ? 'In service — click to mark out of service (no alarms from this room)' : 'Out of service — click to put back in service'}
+              onClick={() => onToggleOperational(room.id, !operational)}
+              className="relative inline-flex h-4 w-7 shrink-0 items-center rounded-full border transition-colors"
+              style={operational
+                ? { background: 'rgba(52,211,153,0.35)', borderColor: 'rgba(52,211,153,0.6)' }
+                : { background: 'rgba(148,163,184,0.15)', borderColor: 'rgba(148,163,184,0.4)' }}
+            >
+              <span
+                className="absolute h-3 w-3 rounded-full transition-all"
+                style={{ left: operational ? 14 : 1, background: operational ? '#34d399' : '#94a3b8' }}
+              />
+            </button>
+          )}
+        </span>
       </div>
     </div>
   );
