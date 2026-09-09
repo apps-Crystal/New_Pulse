@@ -6,7 +6,7 @@ export const maxDuration = 10;
 export const revalidate = 0;
 export const runtime = 'nodejs';
 
-import { getRoomSettings, setRoomOperational } from '../../../lib/db';
+import { getRoomSettings, setRoomSettings } from '../../../lib/db';
 import { isZoneId } from '../../../lib/rooms';
 
 const NO_STORE = { 'Cache-Control': 'no-store' };
@@ -24,12 +24,15 @@ export async function PATCH(request) {
   let body = null;
   try { body = await request.json(); } catch { body = null; }
   const id = body && body.id;
-  const operational = body && body.operational;
-  if (!isZoneId(id) || typeof operational !== 'boolean') {
-    return Response.json({ ok: false, error: 'expected { id: <zone id>, operational: true | false }' }, { status: 400, headers: NO_STORE });
+  const patch = {};
+  if (body && typeof body.operational === 'boolean') patch.operational = body.operational;
+  if (body && typeof body.sensorFault === 'boolean') patch.sensorFault = body.sensorFault;
+  if (body && body.note !== undefined) patch.note = body.note == null ? null : String(body.note);
+  if (!isZoneId(id) || Object.keys(patch).length === 0) {
+    return Response.json({ ok: false, error: 'expected { id: <zone id>, operational?: boolean, sensorFault?: boolean, note?: string | null }' }, { status: 400, headers: NO_STORE });
   }
   try {
-    const rooms = await setRoomOperational(id, operational);
+    const rooms = await setRoomSettings(id, patch);
     return Response.json({ ok: true, rooms }, { headers: NO_STORE });
   } catch (err) {
     return Response.json({ ok: false, error: (err && err.message) || String(err) }, { status: 500, headers: NO_STORE });

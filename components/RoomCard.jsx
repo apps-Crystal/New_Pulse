@@ -40,6 +40,7 @@ function fmtSide(v) {
 
 const DOT = {
   off: { background: '#475569' },
+  fault: { background: '#94a3b8' },
   ok: { background: '#22c55e', boxShadow: '0 0 8px rgba(34,197,94,0.75)' },
   warning: { background: '#eab308', boxShadow: '0 0 8px rgba(234,179,8,0.6)' },
   alarm: { background: '#ef4444', boxShadow: '0 0 8px rgba(239,68,68,0.7)' },
@@ -48,17 +49,19 @@ const DOT = {
 
 const TINT = {
   off: { opacity: 0.55, borderStyle: 'dashed' },
+  fault: { borderColor: 'rgba(148,163,184,0.45)', background: 'rgba(148,163,184,0.07)' },
   warning: { borderColor: 'rgba(234,179,8,0.55)', background: 'rgba(234,179,8,0.06)' },
   alarm: { borderColor: 'rgba(239,68,68,0.55)', background: 'rgba(239,68,68,0.08)' },
   offline: { background: 'rgba(0,0,0,0.18)' },
 };
 
 export default function RoomCard({ room, alarmsEnabled = true, doors = null, doorAlarm = false, onToggleOperational = null }) {
-  // Alarms off: the card keeps its limits line but never colours; only "no signal" still shows.
-  // A door alarm colours the card red like a temperature alarm. A room out of service never colours at all.
+  // Colours never depend on the alarm switch. A door alarm colours the card red like a temperature
+  // alarm; a room out of service is dimmed; a room whose sensor is broken is grey with its note.
   const operational = room.operational !== false;
-  const tempStatus = !operational ? 'off' : alarmsEnabled ? zoneStatus(room) : zoneStatus(room) === 'offline' ? 'offline' : 'ok';
-  const status = operational && alarmsEnabled && doorAlarm && tempStatus !== 'alarm' ? 'alarm' : tempStatus;
+  const fault = operational && room.sensorFault === true;
+  const tempStatus = !operational ? 'off' : fault ? 'fault' : zoneStatus(room);
+  const status = operational && doorAlarm && tempStatus !== 'alarm' ? 'alarm' : tempStatus;
   const t = room.temperature;
   const outHigh = room.setHigh != null && t != null && t > room.setHigh;
   const nearHigh = room.setHigh != null && t != null && t >= room.setHigh - WARN_MARGIN;
@@ -77,10 +80,13 @@ export default function RoomCard({ room, alarmsEnabled = true, doors = null, doo
   } else if (status === 'off') {
     label = 'OUT OF SERVICE';
     labelClass = 'text-slate-500';
+  } else if (status === 'fault') {
+    label = 'SENSOR NOT WORKING';
+    labelClass = 'text-slate-400';
   }
 
   const tempClass =
-    tempStatus === 'alarm' ? 'text-[#f87171]' : tempStatus === 'warning' ? 'text-[#facc15]' : 'text-white';
+    tempStatus === 'alarm' ? 'text-[#f87171]' : tempStatus === 'warning' ? 'text-[#facc15]' : tempStatus === 'fault' ? 'text-slate-500 line-through decoration-slate-600' : 'text-white';
   const range = status === 'offline' ? '— — —' : `${fmtSide(room.setLow)} — ${fmtSide(room.setHigh)}`;
 
   return (
@@ -112,8 +118,9 @@ export default function RoomCard({ room, alarmsEnabled = true, doors = null, doo
             </>
           )}
         </div>
-        <DoorPills doors={doors} alarm={alarmsEnabled && doorAlarm} />
+        <DoorPills doors={doors} alarm={operational && doorAlarm} />
       </div>
+      {room.note && <div className="truncate text-[11px] italic text-slate-400" title={room.note}>{room.note}</div>}
 
       {/* Bottom: setpoint range + status label */}
       <div className="flex items-center justify-between gap-2">

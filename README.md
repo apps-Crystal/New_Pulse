@@ -130,7 +130,9 @@ Each room card has a small switch (bottom right). Switching a room **out of serv
 
 ### Door and panic alarms
 
-A door open for `NEXT_PUBLIC_DOOR_ALARM_MS` (default 30 s) is an alarm like a temperature excursion: red card with an "open for" clock, takeover and siren while alarms are on, cleared when the door closes. A pressed panic button is an alarm that **cannot be silenced from a screen** — it rings until the button is released. The header switch is the single master switch for every alarm kind (temperature, door, panic).
+A door open for `NEXT_PUBLIC_DOOR_ALARM_MS` (default 30 s) is an alarm like a temperature excursion: red card with an "open for" clock, takeover and siren while alarms are on, cleared when the door closes. A pressed panic button is an alarm that **cannot be silenced from a screen** — it rings until the button is released. The bell switch in the header is the single master switch: it turns the siren and the pop-ups on or off for every alarm kind. Card colours, labels and the Warnings / Alarms tiles stay visible either way.
+
+A room whose sensor is broken but which is otherwise working can be marked `sensorFault` (with a `note`) through `PATCH /api/rooms { id, sensorFault: true, note }`: the card turns grey, the temperature is struck through, the note is shown, and no temperature alarm is raised from it while door alarms still apply.
 
 ### Doors, panic buttons and the panel's alarm log
 

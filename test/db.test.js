@@ -451,7 +451,9 @@ test('db module: room settings are read with the snapshot and written through se
   assert.deepEqual(Object.keys(snap.roomSettings), ['frozen_room_3']);          // unknown zone ids are dropped
   assert.ok(pool.calls.some((c) => /create table if not exists "public"\."room_settings"/.test(c.text)), 'the table is created on first use');
   await db.setRoomOperational('chiller_room_5', false);
-  const ins = pool.calls.filter((c) => /insert into "public"\."room_settings"/.test(c.text));
-  assert.deepEqual(ins[ins.length - 1].values, ['chiller_room_5', false]);
+  const ins = () => pool.calls.filter((c) => /insert into "public"\."room_settings"/.test(c.text));
+  assert.deepEqual(ins()[ins().length - 1].values, ['chiller_room_5', false, null, null, false]);
+  await db.setRoomSettings('chiller_room_5', { sensorFault: true, note: 'Sensor not working' });
+  assert.deepEqual(ins()[ins().length - 1].values, ['chiller_room_5', null, true, 'Sensor not working', true]);
   await assert.rejects(() => db.setRoomOperational('kitchen', false), /unknown zone/);
 }));

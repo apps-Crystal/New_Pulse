@@ -14,6 +14,13 @@ test('rooms: settings switch a room off; off rooms never carry an alarm', () => 
   applyRoomSettings(list, { dock_area: { operational: false } });
   assert.equal(list[0].alarm, false);
   assert.equal(applyRoomSettings(null, {}), null);
+  // a working room with a broken sensor: no temperature alarm, note carried to the card
+  const faulty = { chiller_room_5: { label: 'Chiller Room 5', temperature: -19, alarm: true } };
+  applyRoomSettings(faulty, { chiller_room_5: { operational: true, sensorFault: true, note: 'Sensor not working' } });
+  assert.equal(faulty.chiller_room_5.operational, true);
+  assert.equal(faulty.chiller_room_5.sensorFault, true);
+  assert.equal(faulty.chiller_room_5.alarm, false);
+  assert.equal(faulty.chiller_room_5.note, 'Sensor not working');
 });
 
 test('rooms: only the 16 zone ids are accepted; rows from the table become the settings map', () => {
@@ -23,5 +30,9 @@ test('rooms: only the 16 zone ids are accepted; rows from the table become the s
   const s = shapeRoomSettings([{ zone_id: 'frozen_room_2', operational: false, updated_ms: 1800000000000 }, { zone_id: 'x', operational: false }, null]);
   assert.deepEqual(Object.keys(s), ['frozen_room_2']);
   assert.equal(s.frozen_room_2.operational, false);
+  assert.equal(s.frozen_room_2.sensorFault, false);
+  assert.equal(s.frozen_room_2.note, null);
   assert.equal(s.frozen_room_2.updatedAt, new Date(1800000000000).toISOString());
+  const f = shapeRoomSettings([{ zone_id: 'chiller_room_5', operational: true, sensor_fault: true, note: 'Sensor not working', updated_ms: 1 }]);
+  assert.deepEqual([f.chiller_room_5.operational, f.chiller_room_5.sensorFault, f.chiller_room_5.note], [true, true, 'Sensor not working']);
 });

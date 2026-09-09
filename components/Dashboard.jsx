@@ -109,7 +109,6 @@ export default function Dashboard() {
     lastSnapshotRef.current = { data, from };
     setConnected(Boolean(data.connected));
     setSource(from);
-    const armed = alarmsEnabledRef.current;
 
     const roomMap = data.rooms || {};
     const list = Object.entries(roomMap).map(([id, r]) => ({ id, ...r }));
@@ -140,9 +139,8 @@ export default function Dashboard() {
     const io = classifyInputs(inputList, now);
 
     for (const room of list) {
-      // With alarms off a room is only ever ok or offline, so the moment they are switched on every room
-      // already outside its limits raises a fresh alarm and a fresh event.
-      const status = !isOperational(room) ? 'off' : armed ? zoneStatus(room) : zoneStatus(room) === 'offline' ? 'offline' : 'ok';
+      // Colours and counts do not depend on the alarm switch: it only gates the siren and the pop-ups.
+      const status = !isOperational(room) ? 'off' : room.sensorFault ? 'fault' : zoneStatus(room);
       const prev = prevStatusRef.current.get(room.id) || 'ok';
 
       if (status === 'alarm') {
@@ -196,7 +194,7 @@ export default function Dashboard() {
     // Panic buttons: a pressed button is an alarm in its own right while alarms are on, and always an event.
     for (const p of io.panic) {
       const prev = prevPanicRef.current.get(p.tag) || false;
-      if (p.pressed && armed) {
+      if (p.pressed) {
         if (!sinceRef.current.has(p.tag)) sinceRef.current.set(p.tag, now);
         nextAlarms.push({ id: p.tag, label: p.tag, kind: 'panic', since: sinceRef.current.get(p.tag) });
       } else {
@@ -209,7 +207,7 @@ export default function Dashboard() {
     }
     // Doors: open for DOOR_ALARM_MS or more is an alarm (while alarms are on); every open / close is an event.
     for (const d of doorAlarms(io, now, DOOR_ALARM_MS)) {
-      if (!armed || operationalById.get(d.zoneId) === false) { sinceRef.current.delete(`door:${d.tag}`); continue; }
+      if (operationalById.get(d.zoneId) === false) { sinceRef.current.delete(`door:${d.tag}`); continue; }
       if (!sinceRef.current.has(`door:${d.tag}`)) {
         sinceRef.current.set(`door:${d.tag}`, now);
         newEvents.push({ key: `e${eventSeq.current++}`, time: fmtClock(), type: `DOOR OPEN ${Math.round(DOOR_ALARM_MS / 1000)} S`, zone: d.twoDoors ? `${d.room} ${d.label}` : d.room, active: true });
@@ -414,7 +412,7 @@ export default function Dashboard() {
   const doorAlarmZones = new Set(alarms.filter((a) => a.kind === 'door').map((a) => a.zoneId));
   const warnCount = warnings.length;
   const offlineCount = rooms.filter((r) => zoneStatus(r) === 'offline').length;
-  const normalCount = rooms.filter((r) => isOperational(r) && (alarmsEnabled ? zoneStatus(r) === 'ok' : zoneStatus(r) !== 'offline')).length;
+  const normalCount = rooms.filter((r) => isOperational(r) && !r.sensorFault && zoneStatus(r) === 'ok').length;
   const offCount = rooms.filter((r) => !isOperational(r)).length;
 
   let footer;
@@ -437,7 +435,7 @@ export default function Dashboard() {
       <main className="scrollbar-thin mx-auto w-full max-w-7xl space-y-6 px-4 pb-6 pt-2 sm:px-6 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:gap-4 lg:space-y-0 lg:overflow-y-auto lg:pb-8 lg:pt-1">
         {/* First screen: metrics + 4x4 grid. At lg+ this section is exactly the height of <main>, so all 16 zones fit without scrolling. */}
         <div className="space-y-6 lg:flex lg:h-full lg:min-h-0 lg:shrink-0 lg:flex-col lg:gap-4 lg:space-y-0 lg:pb-3">
-          <MetricCards total={total} normal={normalCount} alarm={alarmCount} warning={warnCount} alarmsEnabled={alarmsEnabled} off={offCount} />
+          <MetricCards total={total} normal={normalCount} alarm={alarmCount} warning={warnCount} off={offCount} />
           <PanicStrip panic={io.panic} phase={io.phase} />
 
           {/* Room grid */}
