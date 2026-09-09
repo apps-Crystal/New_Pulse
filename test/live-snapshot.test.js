@@ -112,3 +112,23 @@ test('live-snapshot: a room seeded with a reversed band before its own limit row
   assert.equal(rooms.chiller_room_5.setLow, -15);
   assert.equal(rooms.chiller_room_5.alarm, true);
 });
+
+test('live-snapshot: inputs and the panel alarm log ride along, and survive a readings-only message', () => {
+  const state = snap.createLiveState();
+  const x = snap.ingestExtra(state, {
+    inputs: [{ tag: 'Chiller Room 2 Door', value: 1, ts: NOW }, { tag: 'Panic Button 1', value: 1, ts: NOW }, { tag: 'bad', value: 'x' }],
+    alarms: { active: [{ id: 185577, at: 'x', message: 'Chiller Room 1 Door 2 Open', state: 'On' }], recent: [{ id: 1, at: 'y', message: 'Old', resetAt: 'z' }], at: 't' },
+  }, NOW);
+  assert.equal(x, 3);
+  assert.equal(snap.ingestExtra(state, { readings: [] }, NOW + 1), 0);          // nothing extra: nothing changes
+  snap.ingest(state, [{ tag: 'Frozen Room 1', value: -19, ts: NOW + 1 }], NOW + 1);
+  const out = snap.buildRooms(state, { now: NOW + 2, staleMs: 600000 });
+  assert.deepEqual(out.inputs.map((i) => [i.tag, i.value]), [['Chiller Room 2 Door', 1], ['Panic Button 1', 1]]);
+  assert.equal(out.panelAlarms.active[0].active, true);
+  assert.equal(out.panelAlarms.recent[0].active, false);
+  assert.equal(out.panelAlarms.at, 't');
+  assert.equal(out.rooms.frozen_room_1.temperature, -19);
+  // an older input state never overwrites a newer one
+  snap.ingestExtra(state, { inputs: [{ tag: 'Chiller Room 2 Door', value: 0, ts: NOW - 5000 }] }, NOW + 3);
+  assert.equal(snap.buildRooms(state, { now: NOW + 4, staleMs: 600000 }).inputs[0].value, 1);
+});

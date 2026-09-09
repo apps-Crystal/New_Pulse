@@ -126,7 +126,7 @@ export default function AlarmModal({ alarms, silenced = [], onSilence, onRingAga
           <span className="h-2 w-2 rounded-full" style={{ background: '#ef4444', boxShadow: '0 0 8px rgba(239,68,68,0.9)' }} />
           <span>Siren silenced · {alarms.length === 1 ? '1 alarm' : `${alarms.length} alarms`} still active:</span>
           <span className="tabular font-mono normal-case tracking-normal text-white">
-            {alarms.map((a) => `${a.label} ${a.temperature == null ? '—' : a.temperature.toFixed(1)} °C`).join(' · ')}
+            {alarms.map((a) => (a.kind === 'panic' ? `${a.label} PRESSED` : `${a.label} ${a.temperature == null ? '—' : a.temperature.toFixed(1)} °C`)).join(' · ')}
           </span>
           <button
             type="button"
@@ -182,7 +182,8 @@ export default function AlarmModal({ alarms, silenced = [], onSilence, onRingAga
         <div className={`my-4 flex w-full flex-1 flex-col items-center justify-center ${layout.container}`}>
           {alarms.map((a, i) => {
             const outHigh = a.setHigh != null && a.temperature != null && a.temperature > a.setHigh;
-            const message = outHigh ? 'TEMP TOO HIGH' : 'TEMP TOO LOW';
+            const panic = a.kind === 'panic';
+            const message = panic ? 'PANIC BUTTON PRESSED' : outHigh ? 'TEMP TOO HIGH' : 'TEMP TOO LOW';
             const t = a.temperature;
 
             return (
@@ -205,15 +206,24 @@ export default function AlarmModal({ alarms, silenced = [], onSilence, onRingAga
                 {/* Main content */}
                 <div className="flex w-full min-w-0 flex-1 flex-col justify-center gap-2">
                   <div className={`${layout.msg} font-bold uppercase tracking-[0.18em] text-[#f87171]`}>{message}</div>
-                  <div className="flex items-baseline gap-1">
-                    <span className={`${layout.temp} tabular whitespace-nowrap font-mono font-bold leading-none text-[#f87171]`}>
-                      {t == null || Number.isNaN(t) ? '—' : t.toFixed(1)}
-                    </span>
-                    <span className={`${layout.unit} font-medium text-slate-400`}>°C</span>
-                  </div>
-                  <div className={`${layout.range} tabular font-mono text-slate-400`}>
-                    Range {fmtSide(a.setLow)} — {fmtSide(a.setHigh)}
-                  </div>
+                  {panic ? (
+                    <>
+                      <div className={`${layout.temp} font-bold uppercase leading-none text-[#f87171]`}>Help</div>
+                      <div className={`${layout.range} text-slate-300`}>Someone may be trapped or in trouble — go to the room now</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-baseline gap-1">
+                        <span className={`${layout.temp} tabular whitespace-nowrap font-mono font-bold leading-none text-[#f87171]`}>
+                          {t == null || Number.isNaN(t) ? '—' : t.toFixed(1)}
+                        </span>
+                        <span className={`${layout.unit} font-medium text-slate-400`}>°C</span>
+                      </div>
+                      <div className={`${layout.range} tabular font-mono text-slate-400`}>
+                        Range {fmtSide(a.setLow)} — {fmtSide(a.setHigh)}
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {/* Footer: LIVE + timer */}

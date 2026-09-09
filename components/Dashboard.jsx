@@ -6,8 +6,10 @@ import RoomCard from './RoomCard';
 import AlarmModal from './AlarmModal';
 import WarningToasts from './WarningToasts';
 import AlarmSiren from './AlarmSiren';
-import EventsTable from './EventsTable';
+import LogTabs from './LogTabs';
+import PanicStrip from './PanicStrip';
 import { zoneStatus, fmtClock } from '../lib/format';
+import { classifyInputs } from '../lib/inputs';
 import { connectLive, liveTransport } from '../lib/live-client';
 
 // Two ways in, one shape out. The plant collector's readings arrive live - through Supabase Realtime
@@ -53,6 +55,13 @@ export default function Dashboard() {
   // room leaves alarm, so a room that clears and alarms again rings again; a new room in alarm always rings.
   const [silenced, setSilenced] = useState([]);
   const silencedRef = useRef(new Set());
+  // The panel's INPUT screen (doors, panic buttons, phase preventer) and its own alarm log. A live message
+  // that carries only readings keeps the last known inputs, so a door or panic state never flickers away.
+  const [inputs, setInputs] = useState([]);
+  const inputsRef = useRef([]);
+  const [panelAlarms, setPanelAlarms] = useState(null);
+  const prevDoorRef = useRef(new Map());   // door tag -> open
+  const prevPanicRef = useRef(new Map());  // panic tag -> pressed
   const testTimerRef = useRef(null);
   const testSound = useCallback(() => {
     clearTimeout(testTimerRef.current);
@@ -100,6 +109,12 @@ export default function Dashboard() {
     const nextAlarms = [];
     const nextWarnings = [];
     const newEvents = [];
+
+    const inputList = Array.isArray(data.inputs) && data.inputs.length ? data.inputs : inputsRef.current;
+    inputsRef.current = inputList;
+    setInputs(inputList);
+    if (data.panelAlarms && (data.panelAlarms.active || data.panelAlarms.recent)) setPanelAlarms(data.panelAlarms);
+    const io = classifyInputs(inputList, now);
 
     for (const room of list) {
       // With alarms off a room is only ever ok or offline, so the moment they are switched on every room
@@ -153,6 +168,31 @@ export default function Dashboard() {
       }
 
       prevStatusRef.current.set(room.id, status);
+    }
+
+    // Panic buttons: a pressed button is an alarm in its own right while alarms are on, and always an event.
+    for (const p of io.panic) {
+      const prev = prevPanicRef.current.get(p.tag) || false;
+      if (p.pressed && armed) {
+        if (!sinceRef.current.has(p.tag)) sinceRef.current.set(p.tag, now);
+        nextAlarms.push({ id: p.tag, label: p.tag, kind: 'panic', since: sinceRef.current.get(p.tag) });
+      } else {
+        sinceRef.current.delete(p.tag);
+      }
+      if (p.pressed !== prev) {
+        newEvents.push({ key: `e${eventSeq.current++}`, time: fmtClock(), type: p.pressed ? 'PANIC BUTTON PRESSED' : 'PANIC BUTTON RELEASED', zone: p.tag, active: p.pressed });
+      }
+      prevPanicRef.current.set(p.tag, p.pressed);
+    }
+    // Doors: every open / close transition goes to the event log (never an alarm).
+    for (const list of Object.values(io.doors)) {
+      for (const d of list) {
+        const prev = prevDoorRef.current.get(d.tag);
+        if (prev !== undefined && prev !== d.open) {
+          newEvents.push({ key: `e${eventSeq.current++}`, time: fmtClock(), type: d.open ? 'DOOR OPENED' : 'DOOR CLOSED', zone: list.length > 1 ? `${d.room} ${d.label}` : d.room, active: d.open });
+        }
+        prevDoorRef.current.set(d.tag, d.open);
+      }
     }
 
     setAlarms(nextAlarms);
@@ -283,6 +323,7 @@ export default function Dashboard() {
   const total = rooms.length || 16;
   const alarmCount = alarms.length;
   const ringing = alarms.filter((a) => !silenced.includes(a.id));
+  const io = classifyInputs(inputs, Date.now());
   const warnCount = warnings.length;
   const offlineCount = rooms.filter((r) => zoneStatus(r) === 'offline').length;
   const normalCount = rooms.filter((r) => (alarmsEnabled ? zoneStatus(r) === 'ok' : zoneStatus(r) !== 'offline')).length;
@@ -308,6 +349,7 @@ export default function Dashboard() {
         {/* First screen: metrics + 4x4 grid. At lg+ this section is exactly the height of <main>, so all 16 zones fit without scrolling. */}
         <div className="space-y-6 lg:flex lg:h-full lg:min-h-0 lg:shrink-0 lg:flex-col lg:gap-4 lg:space-y-0 lg:pb-3">
           <MetricCards total={total} normal={normalCount} alarm={alarmCount} warning={warnCount} alarmsEnabled={alarmsEnabled} />
+          <PanicStrip panic={io.panic} phase={io.phase} />
 
           {/* Room grid */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:min-h-0 lg:flex-1 lg:grid-cols-4 lg:grid-rows-4">
@@ -315,12 +357,12 @@ export default function Dashboard() {
               ? Array.from({ length: 16 }).map((_, i) => (
                   <div key={i} className="card h-32 animate-pulse lg:h-full" />
                 ))
-              : rooms.map((room) => <RoomCard key={room.id} room={room} alarmsEnabled={alarmsEnabled} />)}
+              : rooms.map((room) => <RoomCard key={room.id} room={room} alarmsEnabled={alarmsEnabled} doors={io.doors[room.id] || null} />)}
           </div>
         </div>
 
         <div className="lg:shrink-0">
-          <EventsTable events={events} />
+          <LogTabs events={events} panelAlarms={panelAlarms} />
         </div>
 
         <div className="pb-6 text-center text-[11px] text-slate-500 lg:shrink-0">{footer}</div>

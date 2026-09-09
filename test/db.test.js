@@ -69,6 +69,8 @@ function fakePool(spec) {
       if (/FOREIGN KEY/.test(text)) return { rows: spec.fks || [] };
       if (/information_schema\.columns WHERE/.test(text)) return { rows: spec.refColumns || [] };
       if (/\/\* limits \*\//.test(text)) return typeof spec.limits === 'function' ? spec.limits(q) : { rows: spec.limits || [] };
+      if (/\/\* inputs \*\//.test(text)) return { rows: spec.inputs || [] };
+      if (/\/\* alarms \*\//.test(text)) return { rows: spec.alarms || [] };
       return spec.onQuery(text);
     },
     async end() {},
@@ -111,7 +113,7 @@ test('db module: tiered window - recent slice first, 48h window only when a zone
     }),
   });
   db._setPoolForTests(pool);
-  const main = () => pool.calls.filter((c) => /DISTINCT ON/.test(c.text) && !/\/\* limits \*\//.test(c.text));
+  const main = () => pool.calls.filter((c) => /DISTINCT ON/.test(c.text) && !/\/\* (limits|inputs|alarms) \*\//.test(c.text));
 
   // (a) table empty in the last 48h: recent -> window -> unbounded (3 queries), 3-day-old reading shown as stale
   const snap1 = await db.getSnapshot();
@@ -190,7 +192,7 @@ test('db module: PULSE_STALE_MS below 7.5 min keeps a 15 min recent window; PULS
   db._setPoolForTests(pool);
   const snap = await db.getSnapshot();
   assert.equal(snap.ok, true, snap.error);
-  const main = pool.calls.filter((c) => /DISTINCT ON/.test(c.text) && !/\/\* limits \*\//.test(c.text));
+  const main = pool.calls.filter((c) => /DISTINCT ON/.test(c.text) && !/\/\* (limits|inputs|alarms) \*\//.test(c.text));
   assert.equal(main.length, 1);
   assert.ok(!/interval/.test(main[0].text));
   assert.deepEqual(db.getStatus().lastTiers, ['unbounded']);
@@ -387,5 +389,44 @@ test('db module: panel limits are read without a time window, folded into the ro
   pool.calls.length = 0;
   await db.getSnapshot();
   assert.equal(limitCalls().length, 0);
-  assert.equal(pool.calls.filter((c) => /DISTINCT ON/.test(c.text)).length, 1);
+  assert.equal(pool.calls.filter((c) => /DISTINCT ON/.test(c.text) && !/\/\* (limits|inputs|alarms) \*\//.test(c.text)).length, 1);
+}));
+
+// The collector's extra tables ride on the same snapshot: the newest state per input, and the panel's
+// alarm log with active alarms first. A deployment without those tables gets empty lists, never an error.
+test('db module: panel inputs and the panel alarm log are part of the snapshot; missing tables are not an error', withEnv(async (db) => {
+  const pool = fakePool({
+    discovery: disc('temperature_readings', [['id', 'bigint'], ['room', 'text'], ['temperature', 'numeric'], ['recorded_at', 'timestamp with time zone']]),
+    onQuery: (text) => ({ rows: /interval '20 minutes'/.test(text) ? ZONES.map((z) => row(z.label, -1)) : [] }),
+    inputs: [{ tag: 'Chiller Room 2 Door', value: 1, ts_ms: Date.now() - 4000 }, { tag: 'Panic Button 3', value: '0', ts_ms: Date.now() - 4000 }],
+    alarms: [
+      { id: '185577', at_ms: Date.now() - 60000, message: 'Chiller Room 1 Door 2 Open', state: '', reset_ms: null, active: true },
+      { id: '185578', at_ms: Date.now() - 120000, message: 'Frozen Room 2 Door Open', state: 'Off', reset_ms: Date.now() - 118000, active: false },
+    ],
+  });
+  db._setPoolForTests(pool);
+  const snap = await db.getSnapshot();
+  assert.equal(snap.ok, true, snap.error);
+  assert.deepEqual(snap.inputs.map((i) => [i.tag, i.value]), [['Chiller Room 2 Door', 1], ['Panic Button 3', 0]]);
+  assert.equal(snap.panelAlarms.active.length, 1);
+  assert.equal(snap.panelAlarms.active[0].id, 185577);
+  assert.equal(snap.panelAlarms.recent[0].resetAt != null, true);
+  assert.ok(snap.panelAlarms.at);
+  assert.equal(pool.calls.filter((c) => /\/\* inputs \*\//.test(c.text)).length, 1);
+  const alarms = await db.getPanelAlarms(50);
+  assert.equal(alarms.length, 2);
+
+  // tables missing: the query throws, the snapshot still answers with empty lists
+  db._resetForTests();
+  const bare = fakePool({
+    discovery: disc('temperature_readings', [['id', 'bigint'], ['room', 'text'], ['temperature', 'numeric'], ['recorded_at', 'timestamp with time zone']]),
+    onQuery: (text) => { if (/\/\* (inputs|alarms) \*\//.test(text)) { const e = new Error('relation "public.panel_inputs" does not exist'); e.code = '42P01'; throw e; } return { rows: ZONES.map((z) => row(z.label, -1)) }; },
+  });
+  // the fake answers markers before onQuery, so route them to the throwing branch explicitly
+  bare.query = ((orig) => async (q) => { const text = typeof q === 'string' ? q : q.text; if (/\/\* (inputs|alarms) \*\//.test(text)) { const e = new Error('relation does not exist'); e.code = '42P01'; throw e; } return orig(q); })(bare.query.bind(bare));
+  db._setPoolForTests(bare);
+  const snap2 = await db.getSnapshot();
+  assert.equal(snap2.ok, true, snap2.error);
+  assert.deepEqual(snap2.inputs, []);
+  assert.deepEqual(snap2.panelAlarms.active, []);
 }));

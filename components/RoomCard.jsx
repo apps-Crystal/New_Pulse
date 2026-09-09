@@ -1,5 +1,28 @@
 'use client';
+import { DoorOpen, DoorClosed } from 'lucide-react';
 import { zoneStatus, WARN_MARGIN } from '../lib/format';
+
+// The room's door contacts from the panel's INPUT screen; a room can have two (Chiller Room 1).
+function DoorPills({ doors }) {
+  if (!doors || doors.length === 0) return null;
+  return (
+    <div className="flex shrink-0 flex-col items-end gap-1">
+      {doors.map((d) => (
+        <span
+          key={d.tag}
+          title={`${d.tag}: ${d.open ? 'OPEN' : 'closed'}`}
+          className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${d.open ? 'animate-pulse' : ''}`}
+          style={d.open
+            ? { color: '#fcd34d', background: 'rgba(245,158,11,0.16)', borderColor: 'rgba(245,158,11,0.55)' }
+            : { color: '#64748b', background: 'rgba(255,255,255,0.03)', borderColor: 'rgba(255,255,255,0.08)' }}
+        >
+          {d.open ? <DoorOpen size={11} /> : <DoorClosed size={11} />}
+          {doors.length > 1 ? `${d.label.replace('Door ', 'D')} ` : ''}{d.open ? 'Open' : 'Closed'}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 function fmtSide(v) {
   return v == null || Number.isNaN(v) ? '—' : v.toFixed(1);
@@ -18,7 +41,7 @@ const TINT = {
   offline: { background: 'rgba(0,0,0,0.18)' },
 };
 
-export default function RoomCard({ room, alarmsEnabled = true }) {
+export default function RoomCard({ room, alarmsEnabled = true, doors = null }) {
   // Alarms off: the card keeps its limits line but never colours; only "no signal" still shows.
   const status = alarmsEnabled ? zoneStatus(room) : zoneStatus(room) === 'offline' ? 'offline' : 'ok';
   const t = room.temperature;
@@ -57,18 +80,21 @@ export default function RoomCard({ room, alarmsEnabled = true }) {
         <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={DOT[status]} />
       </div>
 
-      {/* Middle: temperature */}
-      <div className="flex min-h-0 items-baseline gap-1">
-        {status === 'offline' || t == null ? (
-          <span className="tabular font-mono text-[clamp(2rem,4.2vh,3rem)] font-bold leading-none text-slate-500">—</span>
-        ) : (
-          <>
-            <span className={`tabular whitespace-nowrap font-mono text-[clamp(2rem,4.2vh,3rem)] font-bold leading-none ${tempClass}`}>
-              {t.toFixed(1)}
-            </span>
-            <span className="text-[13px] font-medium text-slate-400">°C</span>
-          </>
-        )}
+      {/* Middle: temperature, with the door state beside it */}
+      <div className="flex min-h-0 items-center justify-between gap-2">
+        <div className="flex min-w-0 items-baseline gap-1">
+          {status === 'offline' || t == null ? (
+            <span className="tabular font-mono text-[clamp(2rem,4.2vh,3rem)] font-bold leading-none text-slate-500">—</span>
+          ) : (
+            <>
+              <span className={`tabular whitespace-nowrap font-mono text-[clamp(2rem,4.2vh,3rem)] font-bold leading-none ${tempClass}`}>
+                {t.toFixed(1)}
+              </span>
+              <span className="text-[13px] font-medium text-slate-400">°C</span>
+            </>
+          )}
+        </div>
+        <DoorPills doors={doors} />
       </div>
 
       {/* Bottom: setpoint range + status label */}

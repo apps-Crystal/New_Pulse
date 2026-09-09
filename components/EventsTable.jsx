@@ -2,16 +2,18 @@
 
 const TH = 'whitespace-nowrap px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 sm:px-6';
 
-export default function EventsTable({ events }) {
+export default function EventsTable({ events, embedded = false }) {
   return (
-    <div className="card overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center gap-3 border-b border-white/[0.07] px-4 py-3 sm:px-6">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-300">Today's Events</h2>
-        <span className="ml-auto rounded-full border border-white/10 bg-white/5 px-3 py-1 font-mono text-[11px] uppercase tracking-wide text-slate-400">
-          {events.length} logs
-        </span>
-      </div>
+    <div className={embedded ? '' : 'card overflow-hidden'}>
+      {/* Header (the log tabs draw their own) */}
+      {!embedded && (
+        <div className="flex items-center gap-3 border-b border-white/[0.07] px-4 py-3 sm:px-6">
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-300">Today's Events</h2>
+          <span className="ml-auto rounded-full border border-white/10 bg-white/5 px-3 py-1 font-mono text-[11px] uppercase tracking-wide text-slate-400">
+            {events.length} logs
+          </span>
+        </div>
+      )}
 
       {/* Table */}
       <div className="scrollbar-thin overflow-x-auto overflow-y-auto" style={{ maxHeight: '400px' }}>
