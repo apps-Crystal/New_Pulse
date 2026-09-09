@@ -73,6 +73,14 @@ export default function Dashboard() {
   // off keeps its readings on screen but can never raise an alarm, a warning or a door alarm.
   const [roomSettings, setRoomSettings] = useState({});
   const roomSettingsRef = useRef({});
+  const pendingSettingsRef = useRef(new Map()); // zoneId -> operational, flipped here and not yet confirmed by the server
+  const mergeSettings = (incoming) => {
+    const merged = { ...(incoming || {}) };
+    for (const [id, operational] of pendingSettingsRef.current) merged[id] = { ...(merged[id] || {}), operational };
+    roomSettingsRef.current = merged;
+    setRoomSettings(merged);
+    return merged;
+  };
   const testTimerRef = useRef(null);
   const testSound = useCallback(() => {
     clearTimeout(testTimerRef.current);
@@ -106,7 +114,7 @@ export default function Dashboard() {
     const roomMap = data.rooms || {};
     const list = Object.entries(roomMap).map(([id, r]) => ({ id, ...r }));
     // A snapshot from the server already carries the shared settings; a live one is built here without them.
-    if (data.roomSettings && typeof data.roomSettings === 'object') { roomSettingsRef.current = data.roomSettings; setRoomSettings(data.roomSettings); }
+    if (data.roomSettings && typeof data.roomSettings === 'object') mergeSettings(data.roomSettings);
     applyRoomSettings(list, roomSettingsRef.current);
     const operationalById = new Map(list.map((r) => [r.id, isOperational(r)]));
     setRooms(list);
@@ -277,8 +285,7 @@ export default function Dashboard() {
         const res = await fetch('/api/rooms', { cache: 'no-store' });
         const j = await res.json();
         if (j && j.ok && j.rooms) {
-          roomSettingsRef.current = j.rooms;
-          setRoomSettings(j.rooms);
+          mergeSettings(j.rooms);
           const last = lastSnapshotRef.current;
           if (last) applySnapshot(last.data, last.from);
         }
@@ -292,9 +299,8 @@ export default function Dashboard() {
   }, [applySnapshot]);
 
   const toggleOperational = useCallback(async (id, operational) => {
-    const next = { ...roomSettingsRef.current, [id]: { ...(roomSettingsRef.current[id] || {}), operational } };
-    roomSettingsRef.current = next;
-    setRoomSettings(next);
+    pendingSettingsRef.current.set(id, operational);
+    mergeSettings(roomSettingsRef.current);
     const label = (lastSnapshotRef.current && lastSnapshotRef.current.data.rooms && lastSnapshotRef.current.data.rooms[id] && lastSnapshotRef.current.data.rooms[id].label) || id;
     setEvents((prev) => [{ key: `e${eventSeq.current++}`, time: fmtClock(), type: operational ? 'ROOM BACK IN SERVICE' : 'ROOM OUT OF SERVICE', zone: label, active: false }, ...prev].slice(0, MAX_EVENTS));
     const last = lastSnapshotRef.current;
@@ -302,8 +308,13 @@ export default function Dashboard() {
     try {
       const res = await fetch('/api/rooms', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, operational }) });
       const j = await res.json();
-      if (j && j.ok && j.rooms) { roomSettingsRef.current = j.rooms; setRoomSettings(j.rooms); }
-    } catch { /* keeps the local change; the minute refresh reconciles */ }
+      if (j && j.ok && j.rooms) {
+        pendingSettingsRef.current.delete(id);
+        mergeSettings(j.rooms);
+        const again = lastSnapshotRef.current;
+        if (again) applySnapshot(again.data, again.from);
+      }
+    } catch { /* keeps the local change pending; the minute refresh keeps it until the server answers */ }
   }, [applySnapshot]);
 
   // Operator set-points (and the server's OFFLINE threshold) for browser-built snapshots. Retried on
