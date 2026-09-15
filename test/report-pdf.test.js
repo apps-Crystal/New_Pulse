@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { PDFDocument } = require('pdf-lib');
-const { renderDayPdf, reportFileName, fmtElapsed, fmtDT, fmtLongDay, clean } = require('../lib/report-pdf');
+const { renderDayPdf, reportFileName, fmtElapsed, fmtDT, fmtLongDay, clean, compactEvents } = require('../lib/report-pdf');
 const { buildZoneReports } = require('../lib/reports');
 const { LOGO_PNG_BASE64 } = require('../lib/report-logo');
 
@@ -25,7 +25,7 @@ test('report-pdf: one zone renders a summary page, three table pages and a stati
   const bytes = await renderDayPdf({ day: DAY, reports, logoPng: Buffer.from(LOGO_PNG_BASE64, 'base64'), generatedAt: new Date(Date.UTC(2026, 8, 15, 7, 0, 0)) });
   assert.equal(Buffer.from(bytes.slice(0, 5)).toString(), '%PDF-');
   const doc = await PDFDocument.load(bytes);
-  assert.equal(doc.getPageCount(), 5);
+  assert.equal(doc.getPageCount(), 3, 'summary + chart, then 288 slots over two pages with the statistics box on the last');
   assert.equal(doc.getTitle(), 'Crystal Group - Daily Temperature Report - Chiller Room 2 - 14-09-2026');
   assert.equal(doc.getAuthor(), 'Crystal Group');
   const { width, height } = doc.getPage(0).getSize();
@@ -48,7 +48,10 @@ test('report-pdf: all zones get a cover page first; an unlisted zone, a zone wit
   assert.equal(reports[3].zone.label, 'Machineroom');
   const bytes = await renderDayPdf({ day: DAY, reports, logoPng: null });
   const doc = await PDFDocument.load(bytes);
-  assert.equal(doc.getPageCount(), 1 + 4 * 5);
+  assert.equal(doc.getPageCount(), 1 + 4 * 3);
+  // A zone with no slot rows at all still gets its summary page and one table page (with the statistics box).
+  const none = await renderDayPdf({ day: DAY, reports: buildZoneReports(DAY, new Map([['frozen_room_1', []]])), logoPng: null });
+  assert.equal((await PDFDocument.load(none)).getPageCount(), 2);
   assert.equal(doc.getTitle(), 'Crystal Group - Daily Temperature Report - All zones - 14-09-2026');
 });
 
@@ -62,4 +65,8 @@ test('report-pdf: helpers format like a LogTag report', () => {
   assert.equal(clean('Δ 83.144 kJ/mol — −18 °C • ok'), '? 83.144 kJ/mol — ?18 °C • ok');
   assert.equal(reportFileName('2026-09-14', [{ zone: { label: 'Chiller Room 2' } }]), 'Crystal Group - Daily Temperature Report - Chiller Room 2 - 14-09-2026.pdf');
   assert.equal(reportFileName('2026-09-14', [{}, {}]), 'Crystal Group - Daily Temperature Report - All zones - 14-09-2026.pdf');
+  assert.equal(compactEvents('12:03 Door opened; 12:07 Door closed (open 3 min 12 s)'), '12:03 open; 12:07 shut 3m12s');
+  assert.equal(compactEvents('00:42 Door 2 opened; 00:42 Door 2 closed (open 7 s); 01:00 Door 1 closed (open 1 h 4 min)'), '00:42 D2 open; 00:42 D2 shut 7s; 01:00 D1 shut 1h4m');
+  assert.equal(compactEvents('something else'), 'something else');
+  assert.equal(compactEvents(null), '');
 });
