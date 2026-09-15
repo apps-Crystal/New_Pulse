@@ -38,6 +38,39 @@ export default function ReportsPage() {
   const [zone, setZone] = useState('all');
   const [summary, setSummary] = useState(null);  // { day, zones: [...] }
   const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(null);         // href of the PDF being fetched
+  const [downloadError, setDownloadError] = useState(null);
+
+  // Fetch the PDF ourselves and hand the browser a file: a failed request then shows its message here
+  // instead of replacing the page with a JSON error (which is what a plain link would do).
+  async function download(href, fallbackName) {
+    if (busy) return;
+    setBusy(href);
+    setDownloadError(null);
+    try {
+      const res = await fetch(href, { cache: 'no-store' });
+      const type = res.headers.get('content-type') || '';
+      if (!res.ok || !type.includes('application/pdf')) {
+        let msg = `HTTP ${res.status}`;
+        try { const j = await res.json(); if (j && j.error) msg = j.error; } catch { /* not JSON */ }
+        throw new Error(msg);
+      }
+      const blob = await res.blob();
+      const m = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') || '');
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = m ? m[1] : fallbackName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (e) {
+      setDownloadError(`Could not download: ${e.message}. If this keeps happening, reload the page (Ctrl+F5) — a newer version of the dashboard may be waiting.`);
+    } finally {
+      setBusy(null);
+    }
+  }
 
   useEffect(() => {
     let alive = true;
@@ -130,14 +163,14 @@ export default function ReportsPage() {
                 {zoneOptions.map((z) => <option key={z.id} value={z.id} className="bg-[#0b0f1e]">{z.label}</option>)}
               </select>
             </div>
-            <a
-              href={pdfHref || '#'}
-              aria-disabled={!pdfHref}
-              onClick={(e) => { if (!pdfHref) e.preventDefault(); }}
-              className={`inline-flex h-10 items-center gap-2 rounded-lg px-4 text-sm font-semibold transition-colors ${pdfHref ? 'bg-sky-500 text-white hover:bg-sky-400' : 'cursor-not-allowed bg-white/10 text-slate-500'}`}
+            <button
+              type="button"
+              disabled={!pdfHref || Boolean(busy)}
+              onClick={() => pdfHref && download(pdfHref, `Crystal Group - Daily Temperature Report - ${zone === 'all' ? 'All zones' : zone} - ${day}.pdf`)}
+              className={`inline-flex h-10 items-center gap-2 rounded-lg px-4 text-sm font-semibold transition-colors ${pdfHref ? 'bg-sky-500 text-white hover:bg-sky-400 disabled:opacity-60' : 'cursor-not-allowed bg-white/10 text-slate-500'}`}
             >
-              <Download size={16} /> Download PDF
-            </a>
+              <Download size={16} /> {busy === pdfHref ? 'Preparing…' : 'Download PDF'}
+            </button>
             <div className="ml-auto text-right text-[12px] text-slate-400">
               {days === null && 'Loading archived days…'}
               {days && days.length === 0 && 'No archived days yet. The report agent archives each day just after midnight.'}
@@ -149,7 +182,8 @@ export default function ReportsPage() {
               )}
             </div>
           </div>
-          {error && <div className="mt-3 text-[12px] text-red-300">{error}</div>}
+          {error && <div className="mt-3 text-[12px] text-red-300">{error}. If this keeps happening, reload the page (Ctrl+F5).</div>}
+          {downloadError && <div className="mt-3 text-[12px] text-amber-300">{downloadError}</div>}
         </section>
 
         {hasDay && (
@@ -189,9 +223,15 @@ export default function ReportsPage() {
                       <td className="text-right tabular">{z.readings}</td>
                       <td className="text-right tabular">{z.gapMinutes ? `${z.gapMinutes} min` : '—'}</td>
                       <td className="text-right">
-                        <a href={`/api/reports/pdf?day=${encodeURIComponent(day)}&zone=${encodeURIComponent(z.id)}`} title={`Download the ${z.label} report`} className="inline-flex items-center gap-1 text-sky-300 hover:text-sky-200">
+                        <button
+                          type="button"
+                          disabled={Boolean(busy)}
+                          onClick={() => download(`/api/reports/pdf?day=${encodeURIComponent(day)}&zone=${encodeURIComponent(z.id)}`, `Crystal Group - Daily Temperature Report - ${z.label} - ${day}.pdf`)}
+                          title={`Download the ${z.label} report`}
+                          className="inline-flex items-center gap-1 text-sky-300 hover:text-sky-200 disabled:opacity-50"
+                        >
                           <Download size={13} /> PDF
-                        </a>
+                        </button>
                       </td>
                     </tr>
                   ))}
