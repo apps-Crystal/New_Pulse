@@ -161,6 +161,11 @@ weighted by how many raw readings it holds; lowest / highest are the extreme raw
 alarms are judged on the slot average. `test/report-stats.test.js` reproduces the reference LogTag
 report's numbers from its readings.
 
+Doors, panic buttons and the phase preventer come from `daily_doors` (one row per input per day, also
+written nightly by the collector): each zone's summary shows how often and how long its doors were open,
+split into short "ok" openings and long ones of 10 minutes or more, and the page lists the day's long
+openings with their times, the panic presses and any phase fault.
+
 The PDF (`lib/report-pdf.js`, pdf-lib, no files or fonts on the server) follows the LogTag recorder
 layout: a summary page (alarm status, zone information, recording configuration, recorded data, lower
 and upper alarm blocks, notes on gaps and door events, the day's temperature chart with the alarm band
@@ -170,7 +175,8 @@ page with the overview table comes first. The official logo (`lib/report-logo.js
 crystalgroup.in) is embedded as PNG.
 
 - `GET /api/reports` -> `{ ok, days: [{ day, zones }] }` archived days, newest first.
-- `GET /api/reports?day=YYYY-MM-DD` -> `{ ok, day, zones: [...] }` that day's per-zone summaries.
+- `GET /api/reports?day=YYYY-MM-DD` -> `{ ok, day, zones: [...], inputs }` that day's per-zone summaries
+  (each with its doors) plus the panic / phase inputs and the long door openings.
 - `GET /api/reports/pdf?day=YYYY-MM-DD&zone=all|<zone id>` -> the PDF (`Content-Disposition: attachment`),
   404 when the day is not archived.
 

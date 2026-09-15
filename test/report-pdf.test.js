@@ -18,10 +18,17 @@ function samplesFor(zoneId, { withEvents = true, empty = false } = {}) {
   return out;
 }
 
-test('report-pdf: one zone renders a summary page, three table pages and a statistics page, with the logo', async () => {
-  const reports = buildZoneReports(DAY, new Map([['chiller_room_2', samplesFor('chiller_room_2')]]));
+const DOORS = [
+  { tag: 'Chiller Room 2 Door', zone_id: 'chiller_room_2', kind: 'door', threshold_sec: 600, rows: 599, opens: 252, open_minutes: 11.1, ok_opens: 251, ok_minutes: 0.6, long_opens: 1, long_minutes: 10.5, longest_sec: 630, open_at_start: false, open_at_end: true, long_events: [{ at: new Date(DAY_START + 600 * 60000).toISOString(), minutes: 10.5, until: new Date(DAY_START + 610.5 * 60000).toISOString(), ongoing: false }] },
+  { tag: 'Panic Button 2', zone_id: null, kind: 'panic', threshold_sec: 0, rows: 3, opens: 1, open_minutes: 2.4, ok_opens: 0, ok_minutes: 0, long_opens: 1, long_minutes: 2.4, longest_sec: 144, open_at_start: false, open_at_end: false, long_events: [{ at: new Date(DAY_START + 60 * 60000).toISOString(), minutes: 2.4, until: null, ongoing: false }] },
+  { tag: 'Phase Preventer', zone_id: null, kind: 'phase', threshold_sec: 0, rows: 1, opens: 0, open_minutes: 0, ok_opens: 0, ok_minutes: 0, long_opens: 0, long_minutes: 0, longest_sec: 0, open_at_start: false, open_at_end: false, long_events: [] },
+];
+
+test('report-pdf: one zone renders a summary page (with its doors), two table pages and the statistics box, with the logo', async () => {
+  const reports = buildZoneReports(DAY, new Map([['chiller_room_2', samplesFor('chiller_room_2')]]), { doors: DOORS });
   assert.equal(reports[0].zone.label, 'Chiller Room 2');
   assert.equal(reports[0].stats.lower.status, 'fail'); // the sine dips below +2
+  assert.equal(reports[0].doors.length, 1);
   const bytes = await renderDayPdf({ day: DAY, reports, logoPng: Buffer.from(LOGO_PNG_BASE64, 'base64'), generatedAt: new Date(Date.UTC(2026, 8, 15, 7, 0, 0)) });
   assert.equal(Buffer.from(bytes.slice(0, 5)).toString(), '%PDF-');
   const doc = await PDFDocument.load(bytes);
@@ -41,12 +48,13 @@ test('report-pdf: all zones get a cover page first; an unlisted zone, a zone wit
     ['frozen_room_5', samplesFor('frozen_room_5', { empty: true })],
     ['unlisted_machineroom', samplesFor('unlisted_machineroom')],
   ]);
-  const reports = buildZoneReports(DAY, samples);
+  const reports = buildZoneReports(DAY, samples, { doors: DOORS });
   assert.deepEqual(reports.map((r) => r.zone.id), ['frozen_room_5', 'chiller_room_2', 'dock_area', 'unlisted_machineroom'], 'dashboard order (frozen rooms first), unlisted last');
   assert.equal(reports[0].stats.average, null, 'the empty day');
   assert.equal(reports[2].zone.limits, null, 'the dock has no band');
   assert.equal(reports[3].zone.label, 'Machineroom');
-  const bytes = await renderDayPdf({ day: DAY, reports, logoPng: null });
+  const { buildInputsSummary } = require('../lib/reports');
+  const bytes = await renderDayPdf({ day: DAY, reports, inputs: buildInputsSummary(DOORS, reports), logoPng: null });
   const doc = await PDFDocument.load(bytes);
   assert.equal(doc.getPageCount(), 1 + 4 * 3);
   // A zone with no slot rows at all still gets its summary page and one table page (with the statistics box).

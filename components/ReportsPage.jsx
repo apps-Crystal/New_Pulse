@@ -3,7 +3,7 @@
 // The day's per-zone summary is shown on the page so the numbers can be checked before downloading.
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Download, FileText } from 'lucide-react';
+import { ArrowLeft, DoorOpen, Download, FileText } from 'lucide-react';
 import { ZONES } from '../lib/zones';
 
 const IST = 'Asia/Kolkata';
@@ -200,7 +200,7 @@ export default function ReportsPage() {
               <table className="w-full min-w-[900px] text-[12.5px]">
                 <thead className="text-[10.5px] uppercase tracking-wide text-slate-400">
                   <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:text-left">
-                    <th>Zone</th><th>Band</th><th className="!text-right">Lowest</th><th className="!text-right">Highest</th><th className="!text-right">Average</th><th className="!text-right">SD</th><th className="!text-right">MKT</th><th>Lower</th><th>Upper</th><th className="!text-right">In alarm</th><th className="!text-right">Readings</th><th className="!text-right">No data</th><th></th>
+                    <th>Zone</th><th>Band</th><th className="!text-right">Lowest</th><th className="!text-right">Highest</th><th className="!text-right">Average</th><th className="!text-right">SD</th><th className="!text-right">MKT</th><th>Lower</th><th>Upper</th><th className="!text-right">In alarm</th><th className="!text-right">Readings</th><th className="!text-right">No data</th><th className="!text-right" title="Door openings that day, and the time the doors were open in total">Door opens</th><th className="!text-right" title="Openings of 10 minutes or more">Long opens</th><th></th>
                   </tr>
                 </thead>
                 <tbody className="text-slate-200">
@@ -222,6 +222,8 @@ export default function ReportsPage() {
                       <td className="text-right tabular">{fmtMin(z.lowerMinutes + z.upperMinutes)}</td>
                       <td className="text-right tabular">{z.readings}</td>
                       <td className="text-right tabular">{z.gapMinutes ? `${z.gapMinutes} min` : '—'}</td>
+                      <td className="text-right tabular">{z.doors && z.doors.length ? <><span>{z.doorOpens}</span> <span className="text-[10px] text-slate-500">{fmtMin(z.doorOpenMinutes)}</span></> : '—'}</td>
+                      <td className={`text-right tabular ${z.doorLongOpens ? 'font-semibold text-red-300' : ''}`}>{z.doors && z.doors.length ? (z.doorLongOpens ? <><span>{z.doorLongOpens}</span> <span className="text-[10px] text-red-300/70">{fmtMin(z.doorLongMinutes)}</span></> : '0') : '—'}</td>
                       <td className="text-right">
                         <button
                           type="button"
@@ -236,10 +238,50 @@ export default function ReportsPage() {
                     </tr>
                   ))}
                   {summary && zonesForDay.length === 0 && (
-                    <tr><td colSpan={13} className="px-3 py-6 text-center text-slate-400">No zones archived for this day.</td></tr>
+                    <tr><td colSpan={15} className="px-3 py-6 text-center text-slate-400">No zones archived for this day.</td></tr>
                   )}
                 </tbody>
               </table>
+            </div>
+          </section>
+        )}
+
+        {hasDay && summary && summary.inputs && (
+          <section className="card p-5">
+            <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-white">
+              <DoorOpen size={16} className="text-amber-300" /> Doors, panic buttons and phase preventer
+            </div>
+            {summary.inputs.longOpenings.length === 0 ? (
+              <div className="text-[12.5px] text-slate-300">No door was open for 10 minutes or more on this day.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[520px] text-[12.5px]">
+                  <thead className="text-[10.5px] uppercase tracking-wide text-slate-400">
+                    <tr className="[&>th]:px-3 [&>th]:py-1.5 [&>th]:text-left"><th>Zone</th><th>Door</th><th>Open from</th><th>Until</th><th className="!text-right">Open for</th></tr>
+                  </thead>
+                  <tbody className="text-slate-200">
+                    {summary.inputs.longOpenings.map((e, i) => (
+                      <tr key={i} className="border-t border-white/[0.05] [&>td]:px-3 [&>td]:py-1.5">
+                        <td className="font-medium text-white">{e.zone}</td><td>{e.door}</td><td className="tabular">{fmtAt(e.at)}</td><td className="tabular">{e.until ? fmtAt(e.until) : 'midnight'}{e.ongoing ? ' (still open)' : ''}</td>
+                        <td className="text-right tabular font-semibold text-red-300">{fmtMin(e.minutes)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-[12px] text-slate-300">
+              {(() => {
+                const presses = summary.inputs.panic.reduce((n, d) => n + d.opens, 0);
+                const faults = summary.inputs.phase.reduce((n, d) => n + d.opens, 0);
+                return (
+                  <>
+                    <span className={presses ? 'text-red-300' : ''}>Panic buttons: {presses ? `${presses} press(es) — ${summary.inputs.panic.filter((d) => d.opens).map((d) => `${d.tag} ${d.opens}× (${fmtMin(d.openMinutes)})`).join(', ')}` : 'none pressed'}</span>
+                    <span className={faults ? 'text-red-300' : ''}>Phase preventer: {faults ? `${faults} fault(s), ${fmtMin(summary.inputs.phase.reduce((n, d) => n + d.openMinutes, 0))}` : 'no fault'}</span>
+                    <span className="text-slate-500">A door opening of 10 minutes or more counts as long; every panic press or phase fault is listed.</span>
+                  </>
+                );
+              })()}
             </div>
           </section>
         )}
