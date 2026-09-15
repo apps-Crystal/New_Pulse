@@ -207,7 +207,8 @@ export default function ReportsPage() {
         <p className="text-[11.5px] leading-relaxed text-slate-500">
           Each report follows the LogTag recorder layout: a summary page with the alarm status, recorded data, lower and upper alarm blocks and the day's
           temperature chart, then the 5-minute readings table (average, lowest and highest reading in each slot, door events), then a statistics page.
-          Statistics are computed from every raw reading of the day before it is archived. Times are India Standard Time.
+          The archive keeps each past day as 5-minute rows only; every statistic is computed from those rows, the way a LogTag recorder computes its
+          summary from its own 5-minute readings. Times are India Standard Time.
         </p>
       </main>
     </div>

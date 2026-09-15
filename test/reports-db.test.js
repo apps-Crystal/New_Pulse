@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { sortReports, shapeReportSummary } = require('../lib/reports');
+const { zoneInfo, sortZoneIds, buildZoneReports, shapeReportSummary } = require('../lib/reports');
 
 function fakePool(answers = {}) {
   const calls = [];
@@ -22,54 +22,70 @@ function fakePool(answers = {}) {
   };
 }
 
-test('reports: rows come out in dashboard zone order, unlisted zones last; the summary shape is what the page needs', () => {
-  const rows = [
-    { zone_id: 'unlisted_machineroom', label: 'Machine Room' },
-    { zone_id: 'dock_area', label: 'Dock Area' },
-    { zone_id: 'frozen_room_1', label: 'Frozen Room 1' },
-  ];
-  assert.deepEqual(sortReports(rows).map((r) => r.zone_id), ['frozen_room_1', 'dock_area', 'unlisted_machineroom']);
-  const s = shapeReportSummary({
-    zone_id: 'chiller_room_2', label: 'Chiller Room 2', type: 'chiller', day: '2026-09-14', limit_low: 2, limit_high: 4, readings: '1319', slots_with_data: 286, slots: 288,
-    lowest: -1.1, lowest_at: new Date('2026-09-14T03:20:00Z'), highest: 2.5, highest_at: null, average: 0.76, std_dev: 0.78, mkt: 0.79,
-    lower_status: 'fail', upper_status: 'ok', lower_minutes: 1233.1, upper_minutes: 0, lower_occurrences: 3, upper_occurrences: 0, gap_minutes: 18, door_events: 536,
-    operational: false, sensor_fault: false, note: null, generated_at: new Date('2026-09-15T07:00:00Z'),
-  });
-  assert.equal(s.id, 'chiller_room_2');
-  assert.equal(s.readings, 1319);
-  assert.equal(s.lowestAt, '2026-09-14T03:20:00.000Z');
-  assert.equal(s.highestAt, null);
-  assert.equal(s.lowerStatus, 'fail');
-  assert.equal(s.operational, false);
-  assert.equal(s.generatedAt, '2026-09-15T07:00:00.000Z');
+test('reports: zones carry the dashboard identity and fixed band; ids outside the 16 are unlisted; display order holds', () => {
+  const cr2 = zoneInfo('chiller_room_2');
+  assert.deepEqual(cr2, { id: 'chiller_room_2', label: 'Chiller Room 2', type: 'chiller', limits: { low: 2, high: 4 }, typeLabel: 'Chilled room' });
+  assert.deepEqual(zoneInfo('frozen_anteroom').limits, { low: 2, high: 8 });
+  assert.equal(zoneInfo('blast_freezer_1').typeLabel, 'Blast freezer');
+  assert.equal(zoneInfo('dock_area').limits, null);
+  const u = zoneInfo('unlisted_machineroom');
+  assert.equal(u.label, 'Machineroom');
+  assert.equal(u.typeLabel, 'Unlisted');
+  assert.equal(u.limits, null);
+  assert.deepEqual(sortZoneIds(['unlisted_x', 'dock_area', 'frozen_room_1']), ['frozen_room_1', 'dock_area', 'unlisted_x']);
 });
 
-test('reports: the database helpers query the archive tables and treat a missing table as empty', async () => {
+test('reports: a day is built from the 5-minute rows per zone, and the summary shape is what the page needs', () => {
+  const t0 = Date.UTC(2026, 8, 13, 18, 30, 0);
+  const rows = [
+    { zone_id: 'chiller_room_2', slot: 5, ts: new Date(t0 + 5 * 60000), avg_temp: 5, min_temp: 4.8, max_temp: 5.2, readings: 5, events: null },
+    { zone_id: 'chiller_room_2', slot: 0, ts: new Date(t0), avg_temp: 3, min_temp: 2.9, max_temp: 3.1, readings: 5, events: '00:01 Door opened' },
+  ];
+  const reports = buildZoneReports('2026-09-14', new Map([['chiller_room_2', rows]]));
+  assert.equal(reports.length, 1);
+  assert.deepEqual(reports[0].samples.map((r) => r.slot), [0, 5], 'sorted by slot');
+  const s = shapeReportSummary(reports[0]);
+  assert.equal(s.id, 'chiller_room_2');
+  assert.equal(s.day, '2026-09-14');
+  assert.equal(s.limitLow, 2);
+  assert.equal(s.readings, 10);
+  assert.equal(s.lowest, 2.9);
+  assert.equal(s.lowestAt, new Date(t0).toISOString());
+  assert.equal(s.highest, 5.2);
+  assert.equal(s.average, 4);
+  assert.equal(s.upperStatus, 'fail');
+  assert.equal(s.lowerStatus, 'ok');
+  assert.equal(s.upperMinutes, 5);
+  assert.equal(s.upperOccurrences, 1);
+  assert.equal(s.doorEvents, 1);
+  assert.equal(s.gapMinutes, 0);
+  assert.equal(buildZoneReports('2026-09-14', new Map()).length, 0);
+});
+
+test('reports: the database helpers read the 5-minute table and treat a missing table as empty', async () => {
   process.env.DATABASE_URL = 'postgresql://u:p@localhost:5432/db';
   const db = require('../lib/db');
   db._resetForTests();
   const pool = fakePool({
-    '/* daily_reports */ SELECT to_char': [{ day: '2026-09-14', zones: 16 }, { day: '2026-09-13', zones: 16 }],
-    '/* daily_reports */ SELECT *': [{ zone_id: 'dock_area', label: 'Dock Area', day: '2026-09-14' }, { zone_id: 'frozen_room_2', label: 'Frozen Room 2', day: '2026-09-14' }],
-    '/* daily_samples */': [{ zone_id: 'frozen_room_2', slot: 0, avg_temp: -19.5 }, { zone_id: 'frozen_room_2', slot: 5, avg_temp: -19.6 }, { zone_id: 'dock_area', slot: 0, avg_temp: 0 }],
+    'count(DISTINCT "zone_id")': [{ day: '2026-09-14', zones: 16 }, { day: '2026-09-13', zones: 16 }],
+    'SELECT "zone_id", "slot"': [{ zone_id: 'frozen_room_2', slot: 0, avg_temp: -19.5 }, { zone_id: 'frozen_room_2', slot: 5, avg_temp: -19.6 }, { zone_id: 'dock_area', slot: 0, avg_temp: 0 }],
   });
   db._setPoolForTests(pool);
   assert.deepEqual(await db.getReportDays(), [{ day: '2026-09-14', zones: 16 }, { day: '2026-09-13', zones: 16 }]);
-  const day = await db.getDailyReports('2026-09-14');
-  assert.deepEqual(day.map((r) => r.zone_id), ['frozen_room_2', 'dock_area']);
-  assert.deepEqual(pool.calls[1].values, ['2026-09-14']);
+  assert.match(pool.calls[0].text, /\/\* daily_samples \*\//);
+  assert.doesNotMatch(pool.calls[0].text, /daily_reports/);
   const samples = await db.getDailySamples('2026-09-14');
   assert.deepEqual([...samples.keys()].sort(), ['dock_area', 'frozen_room_2']);
   assert.equal(samples.get('frozen_room_2').length, 2);
-  assert.deepEqual(pool.calls[2].values, ['2026-09-14', null]);
+  assert.deepEqual(pool.calls[1].values, ['2026-09-14', null]);
   await db.getDailySamples('2026-09-14', 'dock_area');
-  assert.deepEqual(pool.calls[3].values, ['2026-09-14', 'dock_area']);
+  assert.deepEqual(pool.calls[2].values, ['2026-09-14', 'dock_area']);
+  assert.equal(typeof db.getDailyReports, 'undefined', 'no summary table any more');
 
-  const missing = new Error('relation "public.daily_reports" does not exist');
+  const missing = new Error('relation "public.daily_samples" does not exist');
   missing.code = '42P01';
-  db._setPoolForTests(fakePool({ '/* daily_reports */': missing, '/* daily_samples */': missing }));
+  db._setPoolForTests(fakePool({ '/* daily_samples */': missing }));
   assert.deepEqual(await db.getReportDays(), []);
-  assert.deepEqual(await db.getDailyReports('2026-09-14'), []);
   assert.equal((await db.getDailySamples('2026-09-14')).size, 0);
   db._setPoolForTests(null);
 });

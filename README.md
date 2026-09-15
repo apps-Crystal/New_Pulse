@@ -152,14 +152,22 @@ temperature report as a PDF. The page also shows that day's per-zone summary (lo
 times, average, standard deviation, MKT, lower and upper alarm status, minutes in alarm, readings,
 minutes without data) so the numbers can be checked before downloading.
 
-The PDF follows the LogTag recorder layout: a summary page (alarm status, zone information, recording
-configuration, recorded data, lower and upper alarm blocks, notes on gaps and door events, the day's
-temperature chart with the alarm band shaded), the 5-minute readings table (average, lowest and highest
-reading in each slot, door events against their slot, out-of-band averages in red), and a statistics
-page. With all zones selected a cover page with the overview table comes first. Everything is read from
-`daily_reports` and `daily_samples` (written nightly by the collector, see pulse-server README) and
-rendered with pdf-lib inside the API route, so no files or fonts are needed on the server. The official
-logo (`lib/report-logo.js`, the black mark from crystalgroup.in) is embedded as PNG.
+The archive keeps one thing of a past day: `daily_samples`, one row per zone per 5-minute slot with the
+average of the readings in the slot, the lowest and highest reading inside it, the count, and door
+events (written nightly by the collector, see the pulse-server README). Every statistic is computed
+from those rows when a report is made (`lib/report-stats.js`), the way a LogTag recorder computes its
+summary from its own 5-minute readings: each slot with data is one reading standing for five minutes,
+weighted by how many raw readings it holds; lowest / highest are the extreme raw readings inside a slot;
+alarms are judged on the slot average. `test/report-stats.test.js` reproduces the reference LogTag
+report's numbers from its readings.
+
+The PDF (`lib/report-pdf.js`, pdf-lib, no files or fonts on the server) follows the LogTag recorder
+layout: a summary page (alarm status, zone information, recording configuration, recorded data, lower
+and upper alarm blocks, notes on gaps and door events, the day's temperature chart with the alarm band
+shaded), the 5-minute readings table (average, lowest and highest reading in each slot, door events
+against their slot, out-of-band averages in red), and a statistics page. With all zones selected a cover
+page with the overview table comes first. The official logo (`lib/report-logo.js`, the black mark from
+crystalgroup.in) is embedded as PNG.
 
 - `GET /api/reports` -> `{ ok, days: [{ day, zones }] }` archived days, newest first.
 - `GET /api/reports?day=YYYY-MM-DD` -> `{ ok, day, zones: [...] }` that day's per-zone summaries.
