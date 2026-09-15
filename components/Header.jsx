@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { Bell, BellOff, Volume2 } from 'lucide-react';
+import Link from 'next/link';
+import { Bell, BellOff, FileText, Volume2 } from 'lucide-react';
 import { fmtClock } from '../lib/format';
 
 const PILL =
@@ -93,6 +94,16 @@ export default function Header({ connected, source, alarmsEnabled, onEnableAlarm
               <Volume2 size={14} />
             </button>
           )}
+
+          {/* Daily temperature reports (PDF) for any archived day. */}
+          <Link
+            href="/reports"
+            aria-label="Daily reports"
+            title="Daily temperature reports: download the PDF for any archived day"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-300 transition-colors hover:bg-white/10"
+          >
+            <FileText size={14} />
+          </Link>
 
           <div className="tabular font-mono text-lg font-medium leading-none text-white sm:text-[26px]" suppressHydrationWarning>
             {clock}

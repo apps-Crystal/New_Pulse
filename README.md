@@ -144,6 +144,28 @@ The plant collector can read the panel's own SET LOW / SET HIGH columns (`RECORD
 
 Alarms start muted: the header shows ALARMS OFF and the bell button enables the siren, the alarm modal and the warning toasts. Cards still turn amber / red and events are still recorded while muted.
 
+## Daily reports (PDF)
+
+`/reports` (the document icon in the header) lists every day the collector's report agent has archived
+and lets you pick a date and a zone, or all zones in one file, and download a Crystal Group daily
+temperature report as a PDF. The page also shows that day's per-zone summary (lowest / highest with
+times, average, standard deviation, MKT, lower and upper alarm status, minutes in alarm, readings,
+minutes without data) so the numbers can be checked before downloading.
+
+The PDF follows the LogTag recorder layout: a summary page (alarm status, zone information, recording
+configuration, recorded data, lower and upper alarm blocks, notes on gaps and door events, the day's
+temperature chart with the alarm band shaded), the 5-minute readings table (average, lowest and highest
+reading in each slot, door events against their slot, out-of-band averages in red), and a statistics
+page. With all zones selected a cover page with the overview table comes first. Everything is read from
+`daily_reports` and `daily_samples` (written nightly by the collector, see pulse-server README) and
+rendered with pdf-lib inside the API route, so no files or fonts are needed on the server. The official
+logo (`lib/report-logo.js`, the black mark from crystalgroup.in) is embedded as PNG.
+
+- `GET /api/reports` -> `{ ok, days: [{ day, zones }] }` archived days, newest first.
+- `GET /api/reports?day=YYYY-MM-DD` -> `{ ok, day, zones: [...] }` that day's per-zone summaries.
+- `GET /api/reports/pdf?day=YYYY-MM-DD&zone=all|<zone id>` -> the PDF (`Content-Disposition: attachment`),
+  404 when the day is not archived.
+
 ## Setup
 
 1. Install Node.js 20 or newer. A portable copy may already be present at `C:\Users\CRPL-21\.node\current` (node.exe and npm.cmd); `start-pulse.bat` finds it automatically.
