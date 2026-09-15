@@ -95,14 +95,14 @@ export default function Header({ connected, source, alarmsEnabled, onEnableAlarm
             </button>
           )}
 
-          {/* Daily temperature reports (PDF) for any archived day. */}
+          {/* Daily temperature reports (PDF) for any archived day: a proper button, not an icon to hunt for. */}
           <Link
             href="/reports"
             aria-label="Daily reports"
             title="Daily temperature reports: download the PDF for any archived day"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-300 transition-colors hover:bg-white/10"
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-sky-400/40 bg-sky-500/20 px-4 text-sm font-semibold text-sky-100 transition-colors hover:bg-sky-500/35"
           >
-            <FileText size={14} />
+            <FileText size={16} /> Daily Reports
           </Link>
 
           <div className="tabular font-mono text-lg font-medium leading-none text-white sm:text-[26px]" suppressHydrationWarning>
