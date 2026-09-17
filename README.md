@@ -263,6 +263,25 @@ Room shape: `label`, `type` (`frozen` | `chiller` | `other`), `temperature` (num
 
 `GET /api/health` - connection status for monitoring: `connected`, `detected`, `lastQueryAt`, `lastError`, `queryCount` (readings queries), `discoveryQueryCount`, `lastTiers` (for example `["recent"]` or `["recent","window"]`), `cacheMs`, `staleMs`, `recentMs`, `windowHours`, `setpointsSource` (`env` | `file` | `none`), `setpointsZones`.
 
+## Sign-in through Crystal Core
+
+Pulse has no accounts of its own. Crystal Core (the Crystal Group SSO hub, system code `pulse`) decides who may open it, and every page and API except `/api/health` is closed without a Pulse session:
+
+1. The user opens the Crystal Pulse tile in Core (or any Pulse URL, which sends them to `/signin` and on to Core's launcher). Core checks that `pulse` is granted to the account, mints a 60-second launch token and redirects to `/sso?token=...&return=<path>`.
+2. `app/sso/route.js` hands the token straight back to Core (`POST /api/auth/verify` with `system: "pulse"`); Pulse never decodes it and ignores any identity in the query string.
+3. When Core answers `allowed: true`, Pulse sets its own session cookie (`pulse_session`, an HS256 JWT signed with `PULSE_SESSION_SECRET`, `PULSE_SESSION_HOURS` long, default a week) and `middleware.js` lets the request through from then on. The self-hosted `/ws` hub checks the same cookie for dashboards; the collector is unaffected (it presents `PULSE_LIVE_TOKEN`).
+
+`/signin` explains every failure (no grant in Core, expired link, Core unreachable, not configured) with a button that restarts the flow. The header shows who is signed in; that link (`/signout`) ends the session here and at Core. When a session lapses on a wall display, the next poll answers 401 and the screen goes to Core and comes straight back if Core's own session is still alive.
+
+| Variable | Meaning |
+| --- | --- |
+| `CRYSTAL_CORE_URL` | Origin of the Crystal Core deployment (`https://crystal-core-official-version.vercel.app`) |
+| `PULSE_SESSION_SECRET` | 32+ random characters that sign the session cookie (`openssl rand -base64 48`) |
+| `PULSE_SESSION_HOURS` | Session length in hours (default 168) |
+| `PULSE_AUTH` | `off` disables sign-in entirely: only for a display on a closed plant network with no route to Core. Unset means on; with either variable above missing the gate stays shut and `/signin` says what is missing |
+
+Core's half of the pair is `SYSTEM_URL_PULSE` on the Core deployment, pointing at this app. Access is granted per user from Core's privileges screen (developers have it by default).
+
 ## Deploying to Vercel
 
 The app deploys as a normal Next.js project; the API routes become serverless functions.
@@ -279,11 +298,12 @@ The app deploys as a normal Next.js project; the API routes become serverless fu
    - `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` - turn on the live feed through
      Supabase Realtime (see *Live feed* above; run `sql/realtime.sql` first). Without them the dashboard
      polls the database every `NEXT_PUBLIC_POLL_MS`.
+   - `CRYSTAL_CORE_URL` and `PULSE_SESSION_SECRET` - sign-in through Crystal Core (see above). Without
+     them nobody can sign in: the gate stays shut.
 2. Deploy: `npx vercel --prod` from this folder, or connect the GitHub repo in the Vercel dashboard.
 3. Check `https://<your-app>.vercel.app/api/health` - `connected: true` and `detected.table: readings`.
 
-The URL is public. Turn on Deployment Protection (Vercel Authentication or a password) in the
-project settings if the temperatures should not be visible to anyone with the link.
+The URL itself is public, but every page and API behind it needs a Crystal Core sign-in (see above).
 
 ## Troubleshooting
 

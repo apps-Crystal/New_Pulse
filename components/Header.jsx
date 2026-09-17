@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Bell, BellOff, FileText, Volume2 } from 'lucide-react';
+import { Bell, BellOff, FileText, LogOut, Volume2 } from 'lucide-react';
 import { fmtClock } from '../lib/format';
 
 const PILL =
@@ -29,7 +29,8 @@ function feedPill(connected, source) {
   return { style: GREEN, dot: GREEN_DOT, text: 'Live · DB', title: 'Polling the database (live feed not connected)' };
 }
 
-export default function Header({ connected, source, alarmsEnabled, onEnableAlarms, onDisableAlarms, onTestSound, testing }) {
+// `user` is who Crystal Core signed in ({ name, email, role }) or null when sign-in is off.
+export default function Header({ user = null, connected, source, alarmsEnabled, onEnableAlarms, onDisableAlarms, onTestSound, testing }) {
   const [clock, setClock] = useState('--:--:--');
 
   useEffect(() => {
@@ -108,6 +109,18 @@ export default function Header({ connected, source, alarmsEnabled, onEnableAlarm
           <div className="tabular font-mono text-lg font-medium leading-none text-white sm:text-[26px]" suppressHydrationWarning>
             {clock}
           </div>
+
+          {/* Who Crystal Core signed in; the link ends the session here and at Core. */}
+          {user && (
+            <a
+              href="/signout"
+              title={`Signed in as ${user.email} through Crystal Core. Click to sign out.`}
+              className="inline-flex h-8 max-w-[180px] items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 text-xs font-medium text-slate-300 transition-colors hover:bg-white/10"
+            >
+              <span className="truncate">{user.name || user.email}</span>
+              <LogOut size={12} className="shrink-0" />
+            </a>
+          )}
         </div>
       </div>
     </header>
