@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Bell, BellOff, FileText, LogOut, Volume2 } from 'lucide-react';
+import { Bell, BellOff, FileText, LayoutGrid, Volume2 } from 'lucide-react';
 import { fmtClock } from '../lib/format';
 
 const PILL =
@@ -29,8 +29,9 @@ function feedPill(connected, source) {
   return { style: GREEN, dot: GREEN_DOT, text: 'Live · DB', title: 'Polling the database (live feed not connected)' };
 }
 
-// `user` is who Crystal Core signed in ({ name, email, role }) or null when sign-in is off.
-export default function Header({ user = null, connected, source, alarmsEnabled, onEnableAlarms, onDisableAlarms, onTestSound, testing }) {
+// `user` is who Crystal Core signed in ({ name, email, role }) or null when sign-in is off; `coreUrl` is
+// Crystal Core's dashboard, where that person's Core session is still alive (null when Core is not configured).
+export default function Header({ user = null, coreUrl = null, connected, source, alarmsEnabled, onEnableAlarms, onDisableAlarms, onTestSound, testing }) {
   const [clock, setClock] = useState('--:--:--');
 
   useEffect(() => {
@@ -110,15 +111,14 @@ export default function Header({ user = null, connected, source, alarmsEnabled, 
             {clock}
           </div>
 
-          {/* Who Crystal Core signed in; the link ends the session here and at Core. */}
-          {user && (
+          {/* Back to the Crystal Core hub, still signed in there (Core keeps its own session cookie). Sign-out stays at /signout. */}
+          {coreUrl && (
             <a
-              href="/signout"
-              title={`Signed in as ${user.email} through Crystal Core. Click to sign out.`}
-              className="inline-flex h-8 max-w-[180px] items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 text-xs font-medium text-slate-300 transition-colors hover:bg-white/10"
+              href={coreUrl}
+              title={user ? `Back to Crystal Core, signed in as ${user.email}` : 'Back to Crystal Core'}
+              className="inline-flex h-10 items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 text-sm font-semibold text-slate-200 transition-colors hover:bg-white/10"
             >
-              <span className="truncate">{user.name || user.email}</span>
-              <LogOut size={12} className="shrink-0" />
+              <LayoutGrid size={16} /> Crystal Core
             </a>
           )}
         </div>

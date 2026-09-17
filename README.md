@@ -271,7 +271,7 @@ Pulse has no accounts of its own. Crystal Core (the Crystal Group SSO hub, syste
 2. `app/sso/route.js` hands the token straight back to Core (`POST /api/auth/verify` with `system: "pulse"`); Pulse never decodes it and ignores any identity in the query string.
 3. When Core answers `allowed: true`, Pulse sets its own session cookie (`pulse_session`, an HS256 JWT signed with `PULSE_SESSION_SECRET`, `PULSE_SESSION_HOURS` long, default a week) and `middleware.js` lets the request through from then on. The self-hosted `/ws` hub checks the same cookie for dashboards; the collector is unaffected (it presents `PULSE_LIVE_TOKEN`).
 
-`/signin` explains every failure (no grant in Core, expired link, Core unreachable, not configured) with a button that restarts the flow. The header shows who is signed in; that link (`/signout`) ends the session here and at Core. When a session lapses on a wall display, the next poll answers 401 and the screen goes to Core and comes straight back if Core's own session is still alive.
+`/signin` explains every failure (no grant in Core, expired link, Core unreachable, not configured) with a button that restarts the flow. The header's "Crystal Core" button goes back to Core's dashboard, where the person's Core session is still alive; `/signout` ends the session here and at Core. When a session lapses on a wall display, the next poll answers 401 and the screen goes to Core and comes straight back if Core's own session is still alive.
 
 | Variable | Meaning |
 | --- | --- |

@@ -53,7 +53,7 @@ function goSignIn() {
   window.location.replace(`/signin?next=${encodeURIComponent(here)}`);
 }
 
-export default function Dashboard({ user = null }) {
+export default function Dashboard({ user = null, coreUrl = null }) {
   const [rooms, setRooms] = useState([]);        // ordered array of room objects (with id)
   const [connected, setConnected] = useState(false);
   const [source, setSource] = useState(null);    // 'live' | 'db' | null (nothing has answered yet)
@@ -439,7 +439,7 @@ export default function Dashboard({ user = null }) {
 
   return (
     <div className="min-h-screen font-sans lg:flex lg:h-screen lg:flex-col lg:overflow-hidden">
-      <Header user={user} connected={connected} source={source} alarmsEnabled={alarmsEnabled} onEnableAlarms={() => setAlarmsEnabled(true)} onDisableAlarms={() => { setTestSiren(false); silencedRef.current.clear(); setSilenced([]); setAlarmsEnabled(false); }} onTestSound={testSound} testing={testSiren} />
+      <Header user={user} coreUrl={coreUrl} connected={connected} source={source} alarmsEnabled={alarmsEnabled} onEnableAlarms={() => setAlarmsEnabled(true)} onDisableAlarms={() => { setTestSiren(false); silencedRef.current.clear(); setSilenced([]); setAlarmsEnabled(false); }} onTestSound={testSound} testing={testSiren} />
 
       <main className="scrollbar-thin mx-auto w-full max-w-7xl space-y-6 px-4 pb-6 pt-2 sm:px-6 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:gap-4 lg:space-y-0 lg:overflow-y-auto lg:pb-8 lg:pt-1">
         {/* First screen: metrics + 4x4 grid. At lg+ this section is exactly the height of <main>, so all 16 zones fit without scrolling. */}
