@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import EventsTable from './EventsTable';
+import { kindOf, alarmStatus } from '../lib/alarm-status';
 
 const TH = 'whitespace-nowrap px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 sm:px-6';
 
@@ -17,18 +18,17 @@ function fmtWhen(iso) {
   return sameDay ? `${hh}:${mm}:${ss}` : `${dd} ${hh}:${mm}:${ss}`;
 }
 
-function kindOf(message) {
-  if (/door/i.test(message)) return 'door';
-  if (/panic/i.test(message)) return 'panic';
-  if (/temp/i.test(message)) return 'temp';
-  return 'other';
-}
-
 const KIND_STYLE = {
   door: { color: '#fcd34d', background: 'rgba(245,158,11,0.10)', borderColor: 'rgba(245,158,11,0.35)' },
   panic: { color: '#fca5a5', background: 'rgba(239,68,68,0.14)', borderColor: 'rgba(239,68,68,0.45)' },
   temp: { color: '#93c5fd', background: 'rgba(59,130,246,0.10)', borderColor: 'rgba(59,130,246,0.35)' },
   other: { color: '#cbd5e1', background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)' },
+};
+
+const TONE_STYLE = {
+  bad: { color: '#f87171', background: 'rgba(239,68,68,0.12)', borderColor: 'rgba(239,68,68,0.4)' },
+  ok: { color: '#86efac', background: 'rgba(34,197,94,0.10)', borderColor: 'rgba(34,197,94,0.35)' },
+  muted: { color: '#cbd5e1', background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)' },
 };
 
 // The panel's own alarm log (CURRENT ALARM + ALARM HISTORY, read by the collector), newest first, with
@@ -38,6 +38,14 @@ function PanelAlarmTable({ panelAlarms }) {
   const [more, setMore] = useState(null);   // rows from /api/alarms
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  // Client clock for "open for ..." on a door that is still open; null until mounted so the server
+  // render and the first client render agree.
+  const [now, setNow] = useState(null);
+  useEffect(() => {
+    setNow(Date.now());
+    const t = setInterval(() => setNow(Date.now()), 15000);
+    return () => clearInterval(t);
+  }, []);
 
   const live = [];
   const seen = new Set();
@@ -65,13 +73,14 @@ function PanelAlarmTable({ panelAlarms }) {
               <th className={TH}>Raised</th>
               <th className={TH}>Alarm (as the panel logs it)</th>
               <th className={TH}>Status</th>
-              <th className={TH}>Panel id</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/[0.06]">
             {live.length === 0 ? (
-              <tr><td colSpan="4" className="px-4 py-8 text-center"><span className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-500">No alarms from the panel yet</span></td></tr>
-            ) : live.map((a) => (
+              <tr><td colSpan="3" className="px-4 py-8 text-center"><span className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-500">No alarms from the panel yet</span></td></tr>
+            ) : live.map((a) => {
+              const status = alarmStatus(a, now, fmtWhen);
+              return (
               <tr key={a.id} className="hover:bg-white/[0.03]">
                 <td className="tabular whitespace-nowrap px-4 py-3 font-mono text-sm text-slate-400 sm:px-6">{fmtWhen(a.at)}</td>
                 <td className="px-4 py-3 sm:px-6">
@@ -84,16 +93,14 @@ function PanelAlarmTable({ panelAlarms }) {
                 <td className="px-4 py-3 sm:px-6">
                   <span
                     className="inline-block whitespace-nowrap rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-wide"
-                    style={a.active
-                      ? { color: '#f87171', background: 'rgba(239,68,68,0.12)', borderColor: 'rgba(239,68,68,0.4)' }
-                      : { color: '#cbd5e1', background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)' }}
+                    style={TONE_STYLE[status.tone]}
                   >
-                    {a.active ? 'Active' : a.resetAt ? `Reset ${fmtWhen(a.resetAt)}` : (a.state || 'cleared')}
+                    {status.text}
                   </span>
                 </td>
-                <td className="tabular whitespace-nowrap px-4 py-3 font-mono text-[12px] text-slate-500 sm:px-6">#{a.id}</td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
