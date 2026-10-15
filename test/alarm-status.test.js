@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { kindOf, fmtDur, alarmStatus } = require('../lib/alarm-status');
+const { kindOf, fmtDur, alarmStatus, tempWord } = require('../lib/alarm-status');
 
 const when = (iso) => `@${iso.slice(11, 19)}`;
 
@@ -13,10 +13,14 @@ test('alarm-status: a door alarm shows how long the door was open, or has been o
   assert.deepEqual(alarmStatus({ ...closed, resetAt: null, state: '' }, 0, when), { text: 'cleared', tone: 'muted' });
 });
 
-test('alarm-status: a temperature alarm says whether it is resolved; other alarms keep Active / Reset', () => {
+test('alarm-status: a temperature alarm says whether it is resolved, for how long and from when to when; other alarms keep Active / Reset', () => {
   const low = { id: 2, message: 'Chiller Room 2 Temp Low', at: '2026-10-15T04:00:00.000Z', resetAt: null, active: true, state: 'On' };
-  assert.deepEqual(alarmStatus(low, 1, when), { text: 'Not resolved', tone: 'bad' });
-  assert.deepEqual(alarmStatus({ ...low, active: false, resetAt: '2026-10-15T04:30:00.000Z' }, 1, when), { text: 'Resolved @04:30:00', tone: 'ok' });
+  assert.deepEqual(alarmStatus(low, Date.parse('2026-10-15T04:12:00Z'), when), { text: 'Not resolved \u00b7 low for 12 min \u00b7 since @04:00:00', tone: 'bad' });
+  assert.deepEqual(alarmStatus(low, null, when), { text: 'Not resolved \u00b7 since @04:00:00', tone: 'bad' }, 'before the client clock is known');
+  assert.deepEqual(alarmStatus({ ...low, active: false, resetAt: '2026-10-15T05:05:00.000Z' }, 1, when), { text: 'Resolved \u00b7 low for 1 h 05 min \u00b7 @04:00:00 to @05:05:00', tone: 'ok' });
+  assert.deepEqual(alarmStatus({ ...low, message: 'Frozen Room 1 Temp High', active: false, resetAt: '2026-10-15T04:30:00.000Z' }, 1, when), { text: 'Resolved \u00b7 high for 30 min \u00b7 @04:00:00 to @04:30:00', tone: 'ok' });
+  assert.deepEqual(alarmStatus({ ...low, at: null, active: false, resetAt: '2026-10-15T04:30:00.000Z' }, 1, when), { text: 'Resolved @04:30:00', tone: 'ok' }, 'no raised time: just the reset time');
+  assert.equal(tempWord('Dock Area Temp Alarm'), 'out of range');
   const panic = { id: 3, message: 'Panic Button 1', at: '2026-10-15T04:00:00.000Z', resetAt: '2026-10-15T04:01:00.000Z', active: false, state: 'reset' };
   assert.deepEqual(alarmStatus(panic, 1, when), { text: 'Reset @04:01:00', tone: 'muted' });
   assert.deepEqual(alarmStatus({ ...panic, active: true }, 1, when), { text: 'Active', tone: 'bad' });
