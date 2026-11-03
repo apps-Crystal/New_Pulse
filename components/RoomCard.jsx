@@ -8,28 +8,36 @@ function fmtOpenFor(ms) {
   return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}:${String(s % 60).padStart(2, '0')}`;
 }
 
-// The room's door contacts from the panel's INPUT screen; a room can have two (Chiller Room 1). An open
-// door shows how long it has been open; once it is an alarm the pill turns red with the card.
+// The room's door contacts from the panel's INPUT screen; a room can have two (Chiller Room 1). A small
+// door icon shows the state: it swings open (amber, with how long it has been open) while the door is open,
+// and sits shut (grey, "Closed") while the door is closed. Under a door alarm it turns red with the card.
 function DoorPills({ doors, alarm }) {
   if (!doors || doors.length === 0) return null;
   const now = Date.now();
+  const multi = doors.length > 1;
   return (
     <div className="flex shrink-0 flex-col items-end gap-1">
-      {doors.map((d) => (
-        <span
-          key={d.tag}
-          title={`${d.tag}: ${d.open ? `OPEN for ${fmtOpenFor(now - d.since)}` : 'closed'}`}
-          className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${d.open ? 'animate-pulse' : ''}`}
-          style={d.open
-            ? (alarm
-              ? { color: '#fecaca', background: 'rgba(239,68,68,0.22)', borderColor: 'rgba(239,68,68,0.6)' }
-              : { color: '#fcd34d', background: 'rgba(245,158,11,0.16)', borderColor: 'rgba(245,158,11,0.55)' })
-            : { color: '#64748b', background: 'rgba(255,255,255,0.03)', borderColor: 'rgba(255,255,255,0.08)' }}
-        >
-          {d.open ? <DoorOpen size={11} /> : <DoorClosed size={11} />}
-          {doors.length > 1 ? `${d.label.replace('Door ', 'D')} ` : ''}{d.open ? `Open ${fmtOpenFor(now - d.since)}` : 'Closed'}
-        </span>
-      ))}
+      {doors.map((d) => {
+        const openFor = fmtOpenFor(now - d.since);
+        const style = d.open
+          ? (alarm
+            ? { color: '#fecaca', background: 'rgba(239,68,68,0.22)', borderColor: 'rgba(239,68,68,0.65)' }
+            : { color: '#fcd34d', background: 'rgba(245,158,11,0.16)', borderColor: 'rgba(245,158,11,0.55)' })
+          : { color: '#94a3b8', background: 'rgba(255,255,255,0.03)', borderColor: 'rgba(255,255,255,0.10)' };
+        return (
+          <span
+            key={d.tag}
+            title={`${d.tag}: ${d.open ? `OPEN for ${openFor}` : 'closed'}`}
+            className={`inline-flex items-center gap-1 whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${d.open && alarm ? 'animate-pulse' : ''}`}
+            style={style}
+          >
+            {d.open
+              ? <DoorOpen size={14} strokeWidth={2.4} className="door-swing" aria-hidden="true" />
+              : <DoorClosed size={14} strokeWidth={2.2} aria-hidden="true" />}
+            {multi ? `${d.label.replace('Door ', 'D')} ` : ''}{d.open ? `Open ${openFor}` : 'Closed'}
+          </span>
+        );
+      })}
     </div>
   );
 }

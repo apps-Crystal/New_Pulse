@@ -43,6 +43,19 @@ body {
   animation: alarmPulse 1s ease-in-out infinite;
 }
 
+/* Door indicator: the open-door icon gently swings on its hinge; a closed door sits still. */
+@keyframes doorSwing {
+  0%, 100% { transform: rotate(-7deg); }
+  50% { transform: rotate(5deg); }
+}
+.door-swing {
+  transform-origin: left center;
+  animation: doorSwing 1.5s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .door-swing { animation: none; }
+}
+
 /* Custom scrollbar utility. */
 .scrollbar-thin::-webkit-scrollbar {
   width: 6px;
