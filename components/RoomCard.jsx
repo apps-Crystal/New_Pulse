@@ -1,11 +1,38 @@
 'use client';
-import { DoorOpen, DoorClosed } from 'lucide-react';
 import { zoneStatus, WARN_MARGIN } from '../lib/format';
 
 function fmtOpenFor(ms) {
   const s = Math.max(0, Math.floor(ms / 1000));
   const m = Math.floor(s / 60);
   return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}:${String(s % 60).padStart(2, '0')}`;
+}
+
+// A real door: shown shut in its frame when closed, swung open (with the doorway behind it) when open.
+// Colour is inherited (currentColor) so it takes the amber / red / grey of the pill around it.
+function DoorIcon({ open, size = 17 }) {
+  const common = {
+    width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor',
+    strokeWidth: 1.8, strokeLinejoin: 'round', strokeLinecap: 'round', 'aria-hidden': true,
+  };
+  if (open) {
+    return (
+      <svg {...common}>
+        <path d="M3.5 21.5 H20.5" />
+        <path d="M17 4 V21.5 M17 4 H9" />
+        <g className="door-leaf">
+          <path d="M9 3 L9 21.5 L14.5 19.5 L14.5 5 Z" fill="currentColor" fillOpacity="0.18" />
+          <circle cx="12.8" cy="12.8" r="0.9" fill="currentColor" stroke="none" />
+        </g>
+      </svg>
+    );
+  }
+  return (
+    <svg {...common}>
+      <path d="M4 21.5 H20" />
+      <rect x="6.5" y="3" width="11" height="18.5" rx="1" fill="currentColor" fillOpacity="0.1" />
+      <circle cx="14.6" cy="12.2" r="0.9" fill="currentColor" stroke="none" />
+    </svg>
+  );
 }
 
 // The room's door contacts from the panel's INPUT screen; a room can have two (Chiller Room 1). A small
@@ -31,9 +58,7 @@ function DoorPills({ doors, alarm }) {
             className={`inline-flex items-center gap-1 whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${d.open && alarm ? 'animate-pulse' : ''}`}
             style={style}
           >
-            {d.open
-              ? <DoorOpen size={14} strokeWidth={2.4} className="door-swing" aria-hidden="true" />
-              : <DoorClosed size={14} strokeWidth={2.2} aria-hidden="true" />}
+            <DoorIcon open={d.open} size={17} />
             {multi ? `${d.label.replace('Door ', 'D')} ` : ''}{d.open ? `Open ${openFor}` : 'Closed'}
           </span>
         );

@@ -43,17 +43,18 @@ body {
   animation: alarmPulse 1s ease-in-out infinite;
 }
 
-/* Door indicator: the open-door icon gently swings on its hinge; a closed door sits still. */
-@keyframes doorSwing {
-  0%, 100% { transform: rotate(-7deg); }
-  50% { transform: rotate(5deg); }
+/* Door indicator: the open door's leaf gently swings on its hinge (the left edge); a closed door sits still. */
+@keyframes doorLeaf {
+  0%, 100% { transform: scaleX(1); }
+  50% { transform: scaleX(0.6); }
 }
-.door-swing {
+.door-leaf {
+  transform-box: fill-box;
   transform-origin: left center;
-  animation: doorSwing 1.5s ease-in-out infinite;
+  animation: doorLeaf 1.8s ease-in-out infinite;
 }
 @media (prefers-reduced-motion: reduce) {
-  .door-swing { animation: none; }
+  .door-leaf { animation: none; }
 }
 
 /* Custom scrollbar utility. */
